@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name='viewport' content='width=device-width'/>
+    <title>Box</title>
+    <style>
+        body { margin: 0; }
+    </style>
+</head>
+<body>
+<div id = 'canvas'></div>
+<script src="three.js-master/build/three.js"></script>
+<script src="three.js-master/examples/js/Mirror.js"></script><!--Generate Mirror-->
+<script src="three.js-master/examples/js/controls/OrbitControls.js"></script><!--Camera Control-->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.6.5/dat.gui.min.js"></script>
+<script src="three.js-master/examples/js/libs/stats.min.js"></script><!--Generate FPS Monitor-->
+
+<script>
+
+   var WIDTH = window.innerWidth,
+       HEIGHT = window.innerHeight,
+       VIEW_ANGLE = 45,
+       ASPECT = WIDTH / HEIGHT,
+       NEAR = 1,
+       FAR = 500;
+   var maxheight = 100,
+       maxwidth = 50,
+       maxdepth = 50;
+   var sphereRadius = 5;
+   var sphereNumbers = 1;
+   var scene, camera, renderer;
+   var cameraControls;
+   var spheres = [];
+   var stats;
+   var verticalMirror;
+   var axisHelper;
+   var timer = 1;
+
+   var isPlay = true;
+   var xi = 0, yi = 50, zi = 0;
+   var vx = 0, vy = 0, vz = 0;
+   var g = 7, f = 1, a = .1, w = [0., 0., 0.];
+   var timeStep = 1, currentTimeStep = timeStep;
+   var tol = .01, vtol = .001;
+   var params = {
+       'show balls': true,
+       'show shadow': true,
+       'show axis': false,
+       'add mirror': false,
+       'start/pause': start,
+       'restart': restart,
+       'radius': 5,
+       'position-X': xi,
+       'position-Y': yi,
+       'position-Z': zi,
+       'speed-X': vx,
+       'speed-Y': vy,
+       'speed-Z': vz,
+       'gravity': g,
+       'air resistance': f,
+       'friction': a,
+       'blow': true,
+       'wind-x': 0,
+       'wind-y': 0,
+       'wind-z': 0,
+       'sphere numbers': sphereNumbers,
+       'time step': 1
+   };
+
+   init();
+   animate();
+   createPanel();
+
+   function createPanel(){
+       let panel = new dat.GUI({width: 300});
+       let folder1 = panel.addFolder( 'Visibility' );
+       let folder2 = panel.addFolder( 'Activation/Deactivation' );
+       let folder3 = panel.addFolder( 'Initialization' );
+       let folder4 = panel.addFolder( 'Forces' );
+       let folder5 = panel.addFolder( 'Wind' );
+       let folder6 = panel.addFolder( 'TimeStep' );
+       let folder7 = panel.addFolder( 'Multi-Balls');
+
+       folder1.add(params, 'show balls').onChange(showBalls);
+       folder1.add(params, 'show shadow').onChange(showShadow);
+       folder1.add(params, 'add mirror').onChange(showMirror);
+       folder1.add(params, 'show axis').onChange((showAixs));
+
+       folder2.add(params, 'start/pause');
+       folder2.add(params, 'restart');
+
+       folder3.add(params, 'radius', 1, 10, 1).onChange((r) => (function setRadius(r){sphereRadius = r;})(r));
+       folder3.add(params, 'position-X', -50, 50, 1).onChange((x) => {[xi, yi, zi] = [x, yi, zi ]});
+       folder3.add(params, 'position-Y', 0, 100, 1).onChange((y) => {[xi, yi, zi] = [xi, y, zi ]});
+       folder3.add(params, 'position-Z', -50, 50, 1).onChange((z) => {[xi, yi, zi] = [xi, yi, z ]});
+
+       folder3.add(params, 'speed-X', 0, 200, 1).onChange((x) => {[vx, vy, vz] = [x, vy, vz]});
+       folder3.add(params, 'speed-Y', 0, 200, 1).onChange((y) => {[vx, vy, vz] = [vx, y, vz]});
+       folder3.add(params, 'speed-Z', 0, 200, 1).onChange((z) => {[vx, vy, vz] = [vx, vy, z]});
+
+       folder4.add(params, 'gravity', 0, 10, .1).onChange((gravity) => (function setGravity(gravity){g = gravity})(gravity));
+       folder4.add(params, 'air resistance', 0, 10, .1).onChange((air) => (function setGravity(air){f = air})(air));
+       folder4.add(params, 'friction', 0, 1, .01).onChange((friction) => (function setGravity(friction){a = friction})(friction));
+
+       folder5.add(params, 'wind-x', -20, 20, 1).onChange((x) => (function setWindx(x){w[0] = x})(x));
+       folder5.add(params, 'wind-y', -20, 20, 1).onChange((y) => (function setWindy(y){w[1] = y})(y));
+       folder5.add(params, 'wind-z', -20, 20, 1).onChange((z) => (function setWindz(z){w[2] = z})(z));
+
+       folder6.add(params, 'time step', 0.01, 10, 0.01).onChange((t) => { (function setTimeStep(t){timeStep = t})(t) });
+
+       folder7.add(params, 'sphere numbers', 1, 10, 1).onChange((n) => { (function setSphereNumbers(n){sphereNumbers = n})(n) });
+
+
+       folder1.open();
+       folder2.open();
+       folder3.open();
+       folder4.open();
+       folder5.open();
+       folder6.open();
+       folder7.open();
+   }
+
+   function showShadow(visibility){
+       for(let i = 0; i < spheres.length; ++i){
+           spheres[i].mesh.castShadow = visibility;
+       }
+   }
+
+   function showBalls(visibility) {
+       for(let i = 0; i < spheres.length; ++i){
+           spheres[i].mesh.visible = visibility;
+       }
+   }
+
+   function showAixs(visibility){
+       if(visibility){
+           axisHelper = new THREE.AxisHelper( 100 );
+           scene.add( axisHelper );
+       }else{
+           scene.remove(axisHelper);
+       }
+   }
+
+
+   function showMirror(visibility){
+       if(visibility){
+           verticalMirror = new THREE.Mirror( 60, 60, {
+               clipBias: 0.003,
+               textureWidth: WIDTH * window.devicePixelRatio,
+               textureHeight: HEIGHT * window.devicePixelRatio,
+               color: 0x889999
+           } );
+           verticalMirror.position.y = 35;
+           verticalMirror.position.z = -49.9;
+           scene.add( verticalMirror );
+       }else{
+           scene.remove(verticalMirror);
+       }
+   }
+
+   function start(){
+       if(isPlay){
+           isPlay = false;
+       }else{
+           isPlay = true;
+           lastTime = new Date();
+           animate();
+       }
+   }
+
+   function restart(){
+       removeMesh(spheres);
+       initSpheres(xi, yi, zi);
+       currentTimeStep = timeStep;
+       timer = 1;
+   }
+
+   function removeMesh(spheres){
+       for(let i = 0; i < spheres.length; ++i){
+           let name = spheres[i].mesh.name;
+           scene.remove(spheres[i].mesh);
+           //remove mesh completely from the scene to avoid memory leaks
+           spheres[i].mesh.geometry.dispose();
+           spheres[i].mesh.material.dispose();
+           spheres[i] = undefined;
+       }
+   }
+
+   function init(){
+       let container = document.getElementById('canvas');
+
+       //renderer
+       renderer = new THREE.WebGLRenderer({antialias: true});
+       renderer.setSize(WIDTH, HEIGHT);
+       renderer.setPixelRatio( window.devicePixelRatio );//could display scene at low resolution(On smartphones)
+       container.appendChild(renderer.domElement);
+       renderer.shadowMap.enabled = true;
+       renderer.shadowMap.type = THREE.BasicShadowMap;
+
+       //scene
+       scene = new THREE.Scene();
+
+       //camera
+       camera = new THREE.PerspectiveCamera(VIEW_ANGLE, ASPECT, NEAR, FAR);
+       camera.position.set(0, 75, 160);
+
+       //camera control
+       cameraControls = new THREE.OrbitControls(camera, renderer.domElement);
+       cameraControls.target.set( 0, 40, 0); //the center of the orbit
+       cameraControls.maxDistance = 400;
+       cameraControls.minDistance = 10;
+       cameraControls.update();
+
+       //basic geometry
+       let plane = new THREE.PlaneBufferGeometry( 100.1, 100.1 );
+
+       //walls
+       let planeTop = new THREE.Mesh( plane, new THREE.MeshPhongMaterial( { color: 0xffffff } ) );
+       planeTop.position.y = 100;
+       planeTop.rotateX( Math.PI / 2 );
+       planeTop.receiveShadow = true;
+       scene.add( planeTop );
+
+       let planeBottom = new THREE.Mesh( plane, new THREE.MeshPhongMaterial( { color: 0xffffff } ) );
+       planeBottom.rotateX( -Math.PI / 2 );
+       planeBottom.receiveShadow = true;
+       scene.add( planeBottom );
+
+       let planeBack = new THREE.Mesh( plane, new THREE.MeshPhongMaterial( { color: 0xffffff } ) );
+       planeBack.position.z = -50;
+       planeBack.position.y = 50;
+       planeBack.receiveShadow = true;
+       scene.add( planeBack );
+
+       let planeFront = new THREE.Mesh( plane, new THREE.MeshPhongMaterial( { color: 0x7f7fff } ) );
+       planeFront.position.z = 50;
+       planeFront.position.y = 50;
+       planeFront.rotateY( Math.PI );
+       planeFront.receiveShadow = true;
+       scene.add( planeFront );
+
+       let planeRight = new THREE.Mesh( plane, new THREE.MeshPhongMaterial( { color: 0x00ff00 } ) );
+       planeRight.position.x = 50;
+       planeRight.position.y = 50;
+       planeRight.rotateY( - Math.PI / 2 );
+       planeRight.receiveShadow = true;
+       scene.add( planeRight );
+
+       let planeLeft = new THREE.Mesh( plane, new THREE.MeshPhongMaterial( { color: 0xff0000 } ) );
+       planeLeft.position.x = -50;
+       planeLeft.position.y = 50;
+       planeLeft.rotateY( Math.PI / 2 );
+       planeLeft.receiveShadow = true;
+       scene.add( planeLeft );
+
+       // lights
+       let mainLight = new THREE.PointLight( 0xcccccc, 1.5, 200 );
+       mainLight.position.y = 70;
+       mainLight.castShadow = true;
+       scene.add( mainLight );
+
+       //initialize sphere(s)
+       initSpheres();
+
+       // performance monitor
+       stats = new Stats();
+       container.appendChild( stats.dom );
+
+       lastTime = new Date();
+   }
+
+   function initSpheres(x = xi, y = yi, z = zi){
+       spheres = [];
+       //geometry
+       let geometry = new THREE.SphereGeometry( sphereRadius, 100, 100 );
+       let material = new THREE.MeshPhongMaterial( { color: 0xffffff, emissive: 0x333333, flatShading: true } );
+
+       for(let i = 0; i < sphereNumbers; ++i){
+
+           spheres[i] = new Sphere(new THREE.Mesh(geometry, material));
+           if(i === 0){
+               spheres[i].mesh.position.set(x, y, z);
+           }else{
+               spheres[i].mesh.position.set(
+                   Math.random() * (50 - sphereRadius),
+                   Math.random() * (100 - sphereRadius),
+                   Math.random() * (50 - sphereRadius));
+           }
+           scene.add(spheres[i].mesh);
+       }
+   }
+
+   function Sphere( mesh ) {
+       //default initial position is (0, 0, 0)
+       this.mesh = mesh;
+       this.mesh.castShadow = true;
+       this.mesh.receiveShadow = true;
+       this.direction = [
+           Math.round(Math.random()) === 1 ? 1 : -1,
+           Math.round(Math.random()) === 1 ? 1 : -1,
+           Math.round(Math.random()) === 1 ? 1 : -1
+       ];
+
+       //(CSS)Pixels per second
+       this.speed = [vx, vy, vz];
+
+       this.updateVelocity = function(elapsed){
+           //air resistance in x-direction
+           this.a1 = f * 0.01 * this.speed[0] * this.speed[0] + 0.1;
+           //wind direction
+           if(Math.sign(w[0]) === this.direction[0]){
+               this.speed[0] -= (this.a1 - Math.abs(w[0])) * elapsed / 1000.0;
+           }else{
+               this.speed[0] -= (this.a1 + Math.abs(w[0])) * elapsed / 1000.0;
+           }
+           if(this.speed[0] < vtol) this.speed[0] = 0;
+
+           if(this.speed[0] === 0 && w[0] !== 0) {
+               this.direction[0] = Math.sign(w[0]);
+               this.speed[0] = 0.01;
+           }
+
+           //vy(vz in world coordinate) - gravity
+           if(this.speed[1] === 0 && this.mesh.position.y > sphereRadius){
+               this.direction[1] = -1;
+           }
+
+           if(this.direction[1] === -1){
+               if(Math.sign(w[1]) === this.direction[1]){
+                   this.speed[1] += (g - f + Math.abs(w[1])) * 10 * elapsed / 1000.0;
+               }else{
+                   this.speed[1] += (g - f - Math.abs(w[1])) * 10 * elapsed / 1000.0;
+               }
+
+           } else{
+               if(Math.sign(w[1]) === this.direction[1]){
+                   this.speed[1] -= (g + f - Math.abs(w[1])) * 10 * elapsed / 1000.0;
+               }else{
+                   this.speed[1] -= (g + f + Math.abs(w[1])) * 10 * elapsed / 1000.0;
+               }
+
+           }
+
+           if(this.speed[1] < vtol) this.speed[1] = 0;
+           if(this.speed[1] === 1 && w[1] !== 0) {
+               this.direction[1] = Math.sign(w[1]);
+               this.speed[1] = 0.01;
+           }
+
+           //air resistance in z-direction
+           this.a2 = f * 0.01 * this.speed[2] * this.speed[2] + 0.1;
+
+
+           if(Math.sign(w[2]) === this.direction[2]){
+               this.speed[2] -= (this.a2 - Math.abs(w[2])) * elapsed / 1000.0;
+           }else{
+               this.speed[2] -= (this.a2 + Math.abs(w[2])) * elapsed / 1000.0;
+           }
+
+           if(this.speed[2] < vtol) this.speed[2] = 0;
+           if(this.speed[2] === 0 && w[2] !== 0) {
+               this.direction[2] = Math.sign(w[2]);
+               this.speed[2] = 0.01;
+           }
+       };
+
+       this.updatePosition = function(elapsed) {
+           this.mesh.position.x += this.direction[0] * (elapsed / 1000.0 * this.speed[0]);
+           if (this.mesh.position.x >= (maxwidth - sphereRadius)) {
+               this.mesh.position.x = maxwidth - sphereRadius - tol;
+               this.direction[0] = -1;
+               //friction
+               this.speed[1] -= a;
+               this.speed[2] -= a;
+           }
+           else if (this.mesh.position.x <= -(maxwidth - sphereRadius)) {
+               this.mesh.position.x = -(maxwidth - sphereRadius) + tol;
+               this.direction[0] = 1;
+               this.speed[1] -= a;
+               this.speed[2] -= a;
+           }
+           for(let i = 0; i < 3; ++i){
+               if(this.speed[i] < 0) this.speed[i] = 0;
+           }
+
+           this.mesh.position.y += this.direction[1] * (elapsed / 1000.0 * this.speed[1]);
+           if (this.mesh.position.y >= (maxheight - sphereRadius)) {
+               this.mesh.position.y = maxheight - sphereRadius - tol;
+               this.direction[1] = -1;
+               this.speed[0] -= a;
+               this.speed[2] -= a;
+           }
+           else if (this.mesh.position.y <= sphereRadius) {
+               this.mesh.position.y = sphereRadius + tol;
+               this.direction[1] = 1;
+               this.speed[0] -= a;
+               this.speed[2] -= a;
+           }
+           for(let i = 0; i < 3; ++i){
+               if(this.speed[i] < 0) this.speed[i] = 0;
+           }
+
+           this.mesh.position.z += this.direction[2] * (elapsed / 1000.0 * this.speed[2]);
+           if (this.mesh.position.z >= (maxdepth - sphereRadius)) {
+               this.mesh.position.z =  (maxdepth - sphereRadius) - tol;
+               this.direction[2] = -1;
+               this.speed[0] -= a;
+               this.speed[1] -= a;
+           }
+           else if (this.mesh.position.z <= -(maxdepth - sphereRadius)) {
+               this.mesh.position.z =  -(maxdepth - sphereRadius) + tol;
+               this.direction[2] = 1;
+               this.speed[0] -= a;
+               this.speed[1] -= a;
+           }
+
+           for(let i = 0; i < 3; ++i){
+               if(this.speed[i] < 0) this.speed[i] = 0;
+           }
+       };
+
+       this.resolveCollision = function(sphere){
+
+           if(this.direction[0] * sphere.direction[0] === -1){
+               this.direction[0] *= -1;
+               sphere.direction[0] *= -1;
+           }
+           [this.speed[0], sphere.speed[0]] = [sphere.speed[0], this.speed[0]];
+
+
+           if(this.direction[1] * sphere.direction[1] === -1){
+               this.direction[1] *= -1;
+               sphere.direction[1] *= -1;
+           }
+           //ignore the condition where one is moving and another is still
+           //if(this.speed[1] !== 0 && sphere.speed[1] !== 0){
+           [this.speed[1], sphere.speed[1]] = [sphere.speed[1], this.speed[1]];
+           //}
+
+           if(this.direction[2] * sphere.direction[2] === -1){
+               this.direction[2] *= -1;
+               sphere.direction[2] *= -1;
+           }
+           [this.speed[1], sphere.speed[1]] = [sphere.speed[1], this.speed[1]];
+
+           //avoid two balls stick with each other, not a perfect solution
+           while(colliding(this, sphere)){
+               this.updatePosition(5);
+               sphere.updatePosition(5);
+           }
+       }
+
+   }
+
+
+   function updateCollisionBtwBalls() {
+
+       for(let i = 0; i < spheres.length; ++i){
+           for(let j = i + 1; j < spheres.length; ++j){
+               if(colliding(spheres[i], spheres[j])){
+                   spheres[i].resolveCollision(spheres[j]);
+               }
+           }
+       }
+
+   }
+
+   function colliding(sphere1, sphere2){
+
+       let dist = Math.sqrt(Math.pow(sphere1.mesh.position.x - sphere2.mesh.position.x, 2)
+           + Math.pow(sphere1.mesh.position.y - sphere2.mesh.position.y, 2)
+           + Math.pow(sphere1.mesh.position.z - sphere2.mesh.position.z, 2));
+       if(dist < sphereRadius * 2 + 0.1) return true;
+       return false;
+
+   }
+
+   function animate() {
+
+       if(!isPlay) return;
+       requestAnimationFrame( animate );
+       if(currentTimeStep === 1){
+           render()
+       }else if(currentTimeStep > 1){
+           if(timer % Math.floor(currentTimeStep) === 1) render();
+       }else{
+           for(let i = 0; i < 1 / currentTimeStep; ++i){
+               render();
+           }
+       }
+       timer++;
+       stats.update();
+
+   }
+
+   function render(){
+
+       renderer.render(scene, camera);
+
+       let now = new Date();
+       let elapsed = now.getTime() - lastTime.getTime();
+       lastTime = now;
+       for(let i = 0; i < spheres.length; ++i){
+           //should update veloctity firstly,
+           spheres[i].updateVelocity( elapsed );
+           spheres[i].updatePosition( elapsed );
+       }
+       updateCollisionBtwBalls();
+   }
+
+</script>
+</body>
+</html>
