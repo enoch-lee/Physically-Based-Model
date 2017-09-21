@@ -10,11 +10,11 @@
 </head>
 <body>
 <div id = 'canvas'></div>
-<script src="three.js-master/build/three.js"></script>
-<script src="three.js-master/examples/js/Mirror.js"></script><!--Generate Mirror-->
-<script src="three.js-master/examples/js/controls/OrbitControls.js"></script><!--Camera Control-->
+<script src="js/three.min.js"></script>
+<script src="js/Mirror.js"></script><!--Generate Mirror-->
+<script src="js/OrbitControls.js"></script><!--Camera Control-->
+<script src="js/stats.min.js"></script><!--Generate FPS Monitor-->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.6.5/dat.gui.min.js"></script>
-<script src="three.js-master/examples/js/libs/stats.min.js"></script><!--Generate FPS Monitor-->
 
 <script>
 
@@ -65,7 +65,7 @@
        'wind-y': 0,
        'wind-z': 0,
        'sphere numbers': sphereNumbers,
-       'time step': 1
+       'time step': timeStep
    };
 
    init();
@@ -471,7 +471,7 @@
        let dist = Math.sqrt(Math.pow(sphere1.mesh.position.x - sphere2.mesh.position.x, 2)
            + Math.pow(sphere1.mesh.position.y - sphere2.mesh.position.y, 2)
            + Math.pow(sphere1.mesh.position.z - sphere2.mesh.position.z, 2));
-       if(dist < sphereRadius * 2 + 0.1) return true;
+       if(dist < sphereRadius * 2) return true;
        return false;
 
    }
@@ -479,9 +479,10 @@
    function animate() {
 
        if(!isPlay) return;
+       //setTimeout(function(){requestAnimationFrame( animate )}, 1000 / 60);
        requestAnimationFrame( animate );
        if(currentTimeStep === 1){
-           render()
+           render();
        }else if(currentTimeStep > 1){
            if(timer % Math.floor(currentTimeStep) === 1) render();
        }else{
@@ -495,11 +496,11 @@
    }
 
    function render(){
-
        renderer.render(scene, camera);
 
        let now = new Date();
        let elapsed = now.getTime() - lastTime.getTime();
+       //console.log(elapsed);
        lastTime = now;
        for(let i = 0; i < spheres.length; ++i){
            //should update veloctity firstly,
@@ -508,6 +509,9 @@
        }
        updateCollisionBtwBalls();
    }
+
+
+
 
 </script>
 </body>
