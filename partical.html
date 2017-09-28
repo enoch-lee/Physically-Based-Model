@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name='viewport' content='width=device-width'/>
+    <title>Box</title>
+    <style>
+        body { margin: 0; }
+    </style>
+</head>
+<body>
+<div id = 'canvas'></div>
+<script src="js/three.min.js"></script>
+<script src="js/Mirror.js"></script><!--Generate Mirror-->
+<script src="js/OrbitControls.js"></script><!--Camera Control-->
+<script src="js/stats.min.js"></script><!--Generate FPS Monitor-->
+<script src="js/tween.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.6.5/dat.gui.min.js"></script>
+
+<script>
+    'use strict';
+    const WIDTH = window.innerWidth,
+          HEIGHT = window.innerHeight,
+          VIEW_ANGLE = 45,
+          ASPECT = WIDTH / HEIGHT,
+          NEAR = 1,
+          FAR = 500,
+          PARTICLE_NUM = 1000,
+          LIFE_SPAN = 500;
+    var scene, camera, renderer;
+    var cameraControls, stats;
+    var axisHelper;
+    var group;
+    var analyser;
+
+    var params = {
+        'show axis': false
+    };
+
+    init();
+    animate();
+    createPanel();
+
+    function init(){
+        let container = document.getElementById('canvas');
+
+        //renderer
+        renderer = new THREE.WebGLRenderer({antialias: true});
+        renderer.setSize(WIDTH, HEIGHT);
+        renderer.setPixelRatio( window.devicePixelRatio );
+        container.appendChild(renderer.domElement);
+        //renderer.shadowMap.enabled = true;
+        //renderer.shadowMap.type = THREE.BasicShadowMap;
+        renderer.setClearColor(0x333F47, 1);
+
+
+        //scene
+        scene = new THREE.Scene();
+
+        //camera
+        camera = new THREE.PerspectiveCamera(VIEW_ANGLE, ASPECT, NEAR, FAR);
+        camera.position.set(0, 75, 160);
+
+        //camera control
+        cameraControls = new THREE.OrbitControls(camera, renderer.domElement);
+        cameraControls.target.set( 0, 0, 0); //the center of the orbit
+        cameraControls.maxDistance = 1000;
+        cameraControls.minDistance = 10;
+        cameraControls.update();
+
+        // performance monitor
+        stats = new Stats();
+        container.appendChild( stats.dom );
+
+        //Create an AudioListener and add it to the camera
+        let listener = new THREE.AudioListener();
+        camera.add( listener );
+
+        // create an Audio source
+        let sound = new THREE.Audio( listener );
+        let audioLoader = new THREE.AudioLoader();
+
+        //Load a sound and set it as the Audio object's buffer
+        audioLoader.load( 'sounds/Alan Walker - Faded.mp3', function( buffer ) {
+            sound.setBuffer( buffer );
+            sound.setLoop(true);
+            sound.setVolume(0.5);
+            sound.play();
+        });
+
+        //Create an AudioAnalyser, passing in the sound and desired fftSize
+        analyser = new THREE.AudioAnalyser( sound, 32 );
+
+        //create group
+        group = new THREE.Group();
+        scene.add(group);
+
+        //test sphere
+        let geometry = new THREE.BoxGeometry( 10, 10, 10 );
+        let sphereMaterial = new THREE.MeshPhongMaterial( { color: 0xffffff, emissive: 0x333333, flatShading: true } );
+        let sphere = new THREE.Mesh(geometry, sphereMaterial);
+        sphere.position.set(0, 50, 0);
+        //scene.add(sphere);
+    }
+
+    //traverse的问题！！！！ 慎用！！！！
+
+    function generateParticle(n){
+        let count = n;
+        //init sprite
+        while(count--){
+
+            let loader = new THREE.TextureLoader();
+            let particleTexture = loader.load('pics/particle.png');
+            //get rid of the warning message: your image is not power of 2
+            particleTexture.minFilter = THREE.LinearFilter;
+
+            let material = new THREE.SpriteMaterial({
+                color : Math.random() * 0x808008 + 0x808080,
+                map: particleTexture,
+                blending: THREE.AdditiveBlending,
+                transparent: true,
+            });
+
+            let particle = new THREE.Sprite(material);
+
+            particle.position.set(0, 0, 0);
+            particle.scale.set(2, 2, 2);
+            particle.velocity = new THREE.Vector3(10 * Math.random(), 10 * Math.random(), 10 * Math.random());
+            particle.direction = new THREE.Vector3(
+                Math.round(Math.random()) === 1 ? 1 : -1,
+                Math.round(Math.random()) === 1 ? 1 : -1,
+                Math.round(Math.random()) === 1 ? 1 : -1);
+            particle.lifespan = LIFE_SPAN;
+            group.add(particle);
+        }
+    }
+
+    function updateParticle(timestep){
+
+        let foo = analyser.getAverageFrequency();
+        console.log(foo);
+        let array = analyser.getFrequencyData ();
+
+        group.children.forEach(function(child){
+
+            let p = child.position,
+                d = child.direction,
+                v = child.velocity;
+
+            p.x += array[0] / 100 * timestep / 1000 * d.x * v.x ;
+            p.y += array[4] / 100 * timestep / 1000 * d.y * v.y ;
+            p.z += array[8] / 10 * timestep / 1000 * d.z * v.z ;
+
+            child.lifespan--;
+            if(child.lifespan < 0) group.remove(child);
+        });
+
+    }
+
+    function createPanel(){
+        let panel = new dat.GUI({width: 300});
+        let folder1 = panel.addFolder( 'Visibility' );
+
+        folder1.add(params, 'show axis').onChange((showAixs));
+
+        folder1.open();
+    }
+
+    function showAixs(visibility){
+        if(visibility){
+            axisHelper = new THREE.AxisHelper( 100 );
+            scene.add( axisHelper );
+        }else{
+            scene.remove(axisHelper);
+        }
+    }
+
+    function animate(){
+
+        requestAnimationFrame( animate );
+        render();
+        console.log(analyser.getFrequencyData());
+        stats.update();
+    }
+
+    function render(){
+        generateParticle(2);
+        updateParticle(10);
+        renderer.render(scene, camera);
+    }
+
+
+</script>
+</body>
+</html>
