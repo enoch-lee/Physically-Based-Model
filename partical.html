@@ -14,7 +14,8 @@
 <script src="js/Mirror.js"></script><!--Generate Mirror-->
 <script src="js/OrbitControls.js"></script><!--Camera Control-->
 <script src="js/stats.min.js"></script><!--Generate FPS Monitor-->
-<script src="js/tween.min.js"></script>
+<script src="js/OBJLoader.js"></script>
+<script src="js/MTLLoader.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.6.5/dat.gui.min.js"></script>
 
 <script>
@@ -26,12 +27,13 @@
           NEAR = 1,
           FAR = 500,
           PARTICLE_NUM = 1000,
-          LIFE_SPAN = 500;
+          LIFE_SPAN = 1000;
     var scene, camera, renderer;
     var cameraControls, stats;
     var axisHelper;
-    var group;
+    var group, cube, obj;
     var analyser;
+    var particleTexture, particleMaterial;
 
     var params = {
         'show axis': false
@@ -51,11 +53,11 @@
         container.appendChild(renderer.domElement);
         //renderer.shadowMap.enabled = true;
         //renderer.shadowMap.type = THREE.BasicShadowMap;
-        renderer.setClearColor(0x333F47, 1);
-
+        //renderer.setClearColor(0x333F47, 1);//0x333F47
 
         //scene
         scene = new THREE.Scene();
+        scene.background = new THREE.Color( 0x333F47 );
 
         //camera
         camera = new THREE.PerspectiveCamera(VIEW_ANGLE, ASPECT, NEAR, FAR);
@@ -72,6 +74,57 @@
         stats = new Stats();
         container.appendChild( stats.dom );
 
+        //create group
+        group = new THREE.Group();
+        scene.add(group);
+
+        //test cube
+        let geometry = new THREE.BoxGeometry( 50, 10, 50 );
+        let cubeMaterial = new THREE.MeshPhongMaterial( { color: 0xffffff, emissive: 0x333333 } );
+        cubeMaterial.side = THREE.DoubleSide;
+        cube = new THREE.Mesh(geometry, cubeMaterial);
+        cube.position.set(50, 0,50);
+        cube.geometry.computeBoundingBox();
+        cube.rotateX(10);
+        cube.visible = true;
+        obj = cube;
+        scene.add(cube);
+
+        let loader = new THREE.TextureLoader();
+        particleTexture = loader.load('pics/particle.png');
+        //get rid of the warning message: your image is not power of 2
+        particleTexture.minFilter = THREE.LinearFilter;
+
+        //light
+        let light = new THREE.PointLight( 0xdfebff, 2, 700 );
+        light.position.set(0, 500, 0);
+        scene.add(light);
+        scene.add( new THREE.AmbientLight( 0x666666 ) );
+
+        //cone
+        let cone=new THREE.Mesh(
+            new THREE.CylinderGeometry(2, 30, 50, 20, 2, true),
+            new THREE.MeshBasicMaterial({
+                color: 0xd7c797,
+            })
+        );
+        cone.position.y = 25;
+        scene.add( cone );
+
+        //plane
+        let groundMaterial = new THREE.MeshPhongMaterial( { color: 0xbae0e7 , specular: 0x111111 } );
+        groundMaterial.side = THREE.DoubleSide;
+        let plane = new THREE.Mesh( new THREE.PlaneBufferGeometry( 300, 300 ), groundMaterial );
+        plane.rotation.x = - Math.PI / 2;
+        plane.receiveShadow = true;
+        scene.add( plane );
+
+        //loadOBJ();
+        loadMusic('Eddie - Late Autumn.mp3');
+        generateParticle(200);
+    }
+
+    function loadMusic(musicName){
         //Create an AudioListener and add it to the camera
         let listener = new THREE.AudioListener();
         camera.add( listener );
@@ -81,7 +134,8 @@
         let audioLoader = new THREE.AudioLoader();
 
         //Load a sound and set it as the Audio object's buffer
-        audioLoader.load( 'sounds/Alan Walker - Faded.mp3', function( buffer ) {
+        let fileName = 'sounds/' + musicName;
+        audioLoader.load( fileName, function( buffer ) {
             sound.setBuffer( buffer );
             sound.setLoop(true);
             sound.setVolume(0.5);
@@ -90,47 +144,80 @@
 
         //Create an AudioAnalyser, passing in the sound and desired fftSize
         analyser = new THREE.AudioAnalyser( sound, 32 );
+    }
 
-        //create group
-        group = new THREE.Group();
-        scene.add(group);
+    function loadOBJ(fileName){
+        //test obj file
+        let onProgress = function ( xhr ) {
+            if ( xhr.lengthComputable ) {
+                let percentComplete = xhr.loaded / xhr.total * 100;
+                console.log( Math.round(percentComplete, 2) + '% downloaded' );
+            }
+        };
 
-        //test sphere
-        let geometry = new THREE.BoxGeometry( 10, 10, 10 );
-        let sphereMaterial = new THREE.MeshPhongMaterial( { color: 0xffffff, emissive: 0x333333, flatShading: true } );
-        let sphere = new THREE.Mesh(geometry, sphereMaterial);
-        sphere.position.set(0, 50, 0);
-        //scene.add(sphere);
+        let onError = function ( xhr ) {
+        };
+
+//        let mtlLoader = new THREE.MTLLoader();
+//        mtlLoader.load('objs/Rattan Deckchair L2.mtl', (material) => {
+//            material.preload();
+//            let objLoader = new THREE.OBJLoader();
+//            objLoader.setMaterials(material);
+//            objLoader.load('objs/Rattan Deckchair L2.obj', (object) => {
+//                object.position.set(0, 20, 0);
+//                object.scale.set(0.5, 0.5, 0.5);
+//                object.rotateX(-Math.PI / 2 );
+//                obj = object;
+//                scene.add(object);
+//                console.log(obj);
+//
+//            });
+//        }, onProgress, onError);
+
+        let objLoader = new THREE.OBJLoader();
+        //objLoader.setMaterials(material);
+        objLoader.load('objs/' + fileName, (object) => {
+            object.position.set(0, 20, 0);
+            object.scale.set(30, 30, 30);
+            //object.rotateX(-Math.PI / 2 );
+            obj = object;
+            scene.add(object);
+            console.log(obj);
+        });
+
     }
 
     //traverse的问题！！！！ 慎用！！！！
-
+    //init sprite
     function generateParticle(n){
         let count = n;
-        //init sprite
         while(count--){
-
-            let loader = new THREE.TextureLoader();
-            let particleTexture = loader.load('pics/particle.png');
-            //get rid of the warning message: your image is not power of 2
-            particleTexture.minFilter = THREE.LinearFilter;
-
-            let material = new THREE.SpriteMaterial({
+            particleMaterial = new THREE.SpriteMaterial({
                 color : Math.random() * 0x808008 + 0x808080,
-                map: particleTexture,
-                blending: THREE.AdditiveBlending,
+                //map: particleTexture,
+                //blending: THREE.AdditiveBlending,
                 transparent: true,
             });
 
-            let particle = new THREE.Sprite(material);
+            let particle = new THREE.Sprite(particleMaterial);
 
-            particle.position.set(0, 0, 0);
-            particle.scale.set(2, 2, 2);
-            particle.velocity = new THREE.Vector3(10 * Math.random(), 10 * Math.random(), 10 * Math.random());
+            particle.position.set(0, 50, 0);
+            particle.scale.set(1, 1, 1);
+
             particle.direction = new THREE.Vector3(
                 Math.round(Math.random()) === 1 ? 1 : -1,
-                Math.round(Math.random()) === 1 ? 1 : -1,
+                1,
                 Math.round(Math.random()) === 1 ? 1 : -1);
+
+            let vy = 10 * Math.random() + 30;
+            let r = vy * Math.tan(Math.PI / 4);
+            let theta = Math.random() * 2 * Math.PI;
+            let vx = 3 * Math.sqrt(r) * Math.random() * Math.cos(theta),
+                vz = 3 * Math.sqrt(r) * Math.random() * Math.sin(theta);
+
+            particle.velocity = new THREE.Vector3(vx, vy, vz);
+
+
             particle.lifespan = LIFE_SPAN;
             group.add(particle);
         }
@@ -138,9 +225,12 @@
 
     function updateParticle(timestep){
 
-        let foo = analyser.getAverageFrequency();
-        console.log(foo);
+        //let foo = analyser.getAverageFrequency();
+        //console.log(foo);
         let array = analyser.getFrequencyData ();
+        //console.log(analyser.getAverageFrequency());
+        if(analyser.getAverageFrequency() > 100) generateParticle(1);
+        if(analyser.getAverageFrequency() > 150) generateParticle(50);
 
         group.children.forEach(function(child){
 
@@ -148,12 +238,40 @@
                 d = child.direction,
                 v = child.velocity;
 
-            p.x += array[0] / 100 * timestep / 1000 * d.x * v.x ;
-            p.y += array[4] / 100 * timestep / 1000 * d.y * v.y ;
-            p.z += array[8] / 10 * timestep / 1000 * d.z * v.z ;
+            p.x += timestep / 1000 * d.x * v.x ;
+            p.y += timestep / 1000 * d.y * v.y ;
+            p.z += timestep / 1000 * d.z * v.z ;
+
+            if(d.y > 0){
+                v.y -= timestep / 1000 * 20;
+            }else{
+                v.y += timestep / 1000 * 15;
+            }
+
+            if(v.y < 0){
+                v.y = 0;
+                if(d.y === 1){
+                    d.y = -1;
+                }
+            }
 
             child.lifespan--;
             if(child.lifespan < 0) group.remove(child);
+            if(p.y < 0) {
+                group.remove(child);
+            }
+
+            //generate ray in random direction
+            if(typeof obj !== "undefined"){
+                let direction = new THREE.Vector3(Math.random(), Math.random(), Math.random()).normalize();
+                let raycaster = new THREE.Raycaster(p, direction);
+                let collisions = raycaster.intersectObject(obj);
+                console.log(collisions.length);
+                if(collisions.length % 2 === 1){
+                    d.multiplyScalar(-1);
+                }
+            }
+
         });
 
     }
@@ -180,12 +298,12 @@
 
         requestAnimationFrame( animate );
         render();
-        console.log(analyser.getFrequencyData());
+        //console.log(analyser.getFrequencyData());
         stats.update();
     }
 
     function render(){
-        generateParticle(2);
+        //generateParticle(1);
         updateParticle(10);
         renderer.render(scene, camera);
     }

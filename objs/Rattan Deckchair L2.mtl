@@ -1,0 +1,38 @@
+# 
+# Wavefront material file
+# Converted by the DEEP Exploration  Deep Exploration 5.7 5.7.3.4950 Release
+# Right Hemisphere, LTD
+# http://www.righthemisphere.com/
+# 
+
+newmtl Textile_
+Ka 0.462745 0.317647 0.211765
+Kd 0.462745 0.317647 0.211765
+Ks 0.9 0.9 0.9
+illum 2
+Ns 4
+map_Kd 
+map_bump 
+bump 
+map_opacity 
+map_d 
+refl 
+map_kS 
+map_kA 
+map_Ns 
+
+newmtl Rattan
+Ka 0 0 0
+Kd 1 1 1
+Ks 1 1 1
+illum 2
+Ns 32
+map_Kd Rattan Deckchair_df.png
+map_bump Rattan Deckchair_bp.png
+bump Rattan Deckchair_bp.png
+map_opacity 
+map_d 
+refl 
+map_kS 
+map_kA 
+map_Ns 

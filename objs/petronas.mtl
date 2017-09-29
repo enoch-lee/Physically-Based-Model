@@ -1,0 +1,72 @@
+#
+# Wavefront material file: v:\dropbox\turbo squid\landmarks collection\obj\petronas.mtl
+#
+# Converted by the PolyTrans geometry converter from Okino Computer Graphics, Inc.
+# Date/time of export: 01/31/2013 09:00:09
+#
+# Bounding box of geometry = (-160.677,0,-102.122) to (73.9199,449.517,102.204).
+
+newmtl default
+	Ns 32
+	d 1
+	illum 2
+	Kd 0.4 0.4 0.4
+	Ks 0.7 0.7 0.7
+	Ka 0.3 0.3 0.3
+
+newmtl base
+	Ns 25
+	d 1
+	illum 2
+	Kd 0.693333 0.693333 0.693333
+	Ks 0 0 0
+	Ka 0.26 0.26 0.26
+
+newmtl column
+	Ns 256
+	d 1
+	illum 2
+	Kd 0.67451 0.67451 0.67451
+	Ks 0.421569 0.421569 0.421569
+	Ka 0.252941 0.252941 0.252941
+
+newmtl glass1
+	Ns 300
+	d 0.5
+	illum 2
+	Kd 0.202353 0.310588 0.315294
+	Ks 0.354118 0.543529 0.551765
+	Ka 0.151765 0.232941 0.236471
+
+newmtl glass2
+	Ns 300
+	d 0.8
+	illum 2
+	Kd 0.102353 0.107059 0.130588
+	Ks 0.238824 0.249804 0.304706
+	Ka 0.102353 0.107059 0.130588
+
+newmtl louvres1
+	Ns 256
+	d 1
+	illum 2
+	Kd 0.715294 0.715294 0.715294
+	Ks 0.447059 0.447059 0.447059
+	Ka 0.268235 0.268235 0.268235
+
+newmtl steel1
+	Ns 256
+	d 1
+	illum 2
+	Kd 0.67451 0.67451 0.67451
+	Ks 0.421569 0.421569 0.421569
+	Ka 0.252941 0.252941 0.252941
+
+newmtl steel2
+	Ns 256
+	d 1
+	illum 2
+	Kd 0.67451 0.67451 0.67451
+	Ks 0.421569 0.421569 0.421569
+	Ka 0.252941 0.252941 0.252941
+
