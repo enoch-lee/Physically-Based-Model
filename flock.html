@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name='viewport' content='width=device-width'/>
-    <title>Particle</title>
+    <title>Flock</title>
     <style>
         body {
             font-family: Monospace;
@@ -22,50 +22,200 @@
     </style>
 </head>
 <body>
-<div id = 'info'></div>
+<!--<div id = 'info'></div>-->
 <div id = 'canvas'></div>
 <script src="js/three.min.js"></script>
-<script src="js/Mirror.js"></script><!--Generate Mirror-->
-<script src="js/OrbitControls.js"></script><!--Camera Control-->
-<script src="js/stats.min.js"></script><!--Generate FPS Monitor-->
+<script src="js/Bird.js"></script>
+<script src="js/OrbitControls.js"></script>
+<script src="js/stats.min.js"></script>
 <script src="js/OBJLoader.js"></script>
 <script src="js/MTLLoader.js"></script>
-<script src="js/CCapture.all.min.js"></script>
-<script src="js/Whammy.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.6.5/dat.gui.min.js"></script>
 
 <script>
+    const NEIGHBOR_RADIUS = 50;
+    const MAX_STEER_FORCE = 1;
+    const DESIRED_SEPARATION = 20;
+
     'use strict';
     let Boid = function(){
         this.velocity = new THREE.Vector3();
         this.position = new THREE.Vector3();
-        let geometry;
-        this.mesh.add();
     };
 
-    Boid.prototype.move = function(){
-        let acceleration = this.flock();
-        this.velocity.add(acceleration)
-        this.position.add(this.velocity  * timeStep)
+    Boid.prototype.move = function(boids, timeStep = 1){
+        let acceleration = this.flock(boids);
+        this.velocity.add(acceleration);
+        this.position.add(this.velocity.multiplyScalar(timeStep));
     };
 
-    Boid.prototype.flock = function(){
+    Boid.prototype.flock = function(boids){
+        let acceleration = new THREE.Vector3();
+        acceleration.add(this.cohesion(boids));
+        acceleration.add(this.alignment(boids));
+        acceleration.add(this.separation(boids));
 
+        return acceleration;
     };
 
-    Boid.prototype.cohesion = function(){
+    Boid.prototype.cohesion = function(boids){
+        let count = 0;
+        let pSum = new THREE.Vector3();
+        let steer = new THREE.Vector3();
 
+        for(let i = 0; i < boids.length; ++i){
+            let boid = boids[i];
+            let dist = boid.position.distanceTo(boid.position);
+            if(dist > 0 && dist < NEIGHBOR_RADIUS){
+                pSum.add(boid.position);
+                count++;
+            }
+        }
+
+        if(count > 0){
+            pSum.divideScalar(count);
+        }
+
+        steer.subVectors(pSum, this.position);
+
+        let l = steer.length();
+        if(steer > MAX_STEER_FORCE){
+            steer.divideScalar(l / MAX_STEER_FORCE);
+        }
+
+        return steer;
     };
 
-    Boid.prototype.alignment = function(){
+    Boid.prototype.alignment = function(boids){
+        let count = 0;
+        let vSum = new THREE.Vector3();
 
+        for(let i = 0; i < boids.length; ++i){
+            let boid = boids[i];
+            let dist = this.position.distanceTo(boid.position);
+            if(dist > 0 && dist < NEIGHBOR_RADIUS){
+                vSum.add(boid.velocity);
+                count++;
+            }
+        }
+
+        if(count > 0){
+            vSum.divideScalar(count);
+            let l = vSum.length();
+            if(vSum > MAX_STEER_FORCE){
+                vSum.divideScalar(l / MAX_STEER_FORCE);
+            }
+        }
+
+        return vSum;
     };
 
-    Boid.prototype.separation = function(){
+    Boid.prototype.separation = function(boids){
+        let count = 0;
+        let pSum = new THREE.Vector3();
+        let repulse = new THREE.Vector3();
 
+        for(let i = 0; i < boids.length; ++i){
+            let boid = boids[i];
+            let dist = this.position.distanceTo(boid.position);
+            if(dist > 0 && dist < DESIRED_SEPARATION){
+                pSum.add(repulse.subVectors(this.position, boid.position).normalize().divideScalar(dist));
+                count++;
+            }
+        }
+
+        if(count > 0){
+            pSum.divideScalar(count);
+        }
+
+        return pSum;
     };
 
 
 </script>
+
+<script>
+    const WIDTH = window.innerWidth,
+          HEIGHT = window.innerHeight,
+          VIEW_ANGLE = 60,
+          ASPECT = WIDTH / HEIGHT,
+          NEAR = 1,
+          FAR = 500;
+    const BOIDS_NUM = 100;
+
+    let scene, camera, renderer;
+    let cameraControls, stats;
+    let boids = [], birds = [];
+
+    init();
+    animate();
+
+    function init(){
+        let container = document.getElementById('canvas');
+
+        //renderer
+        renderer = new THREE.WebGLRenderer({antialias: true});
+        renderer.setSize(WIDTH, HEIGHT);
+        renderer.setPixelRatio( window.devicePixelRatio );
+        container.appendChild(renderer.domElement);
+
+        //scene
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color( 0xffffff );
+
+        //camera
+        camera = new THREE.PerspectiveCamera(VIEW_ANGLE, ASPECT, NEAR, FAR);
+        camera.position.set(0, 75, 160);
+
+        //camera control
+        cameraControls = new THREE.OrbitControls(camera, renderer.domElement);
+        cameraControls.target.set( 0, 0, 0); //the center of the orbit
+        cameraControls.maxDistance = 500;
+        cameraControls.minDistance = 10;
+        cameraControls.update();
+
+        // performance monitor
+        stats = new Stats();
+        container.appendChild( stats.dom );
+
+        for(let i = 0; i < BOIDS_NUM; ++i){
+            boids[i] = new Boid();
+
+            boids[i].position.set(Math.random() * 400 - 200, Math.random() * 400 - 200, Math.random() * 400 - 200);
+            boids[i].velocity.set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1);
+
+            let geometry = new Bird();
+            let material = new THREE.MeshBasicMaterial( { color:Math.random() * 0xffffff, side: THREE.DoubleSide } );
+            birds[i] = new THREE.Mesh(geometry, material);
+            birds[i].phase = Math.floor( Math.random() * 62.83 );
+            scene.add(birds[i]);
+        }
+    }
+
+    function animate(){
+        requestAnimationFrame(animate);
+        render();
+        stats.update();
+    }
+
+    function render(){
+        for(let i = 0; i < BOIDS_NUM; ++i){
+            let boid = boids[i];
+            let bird = birds[i];
+            boid.move(boids);
+            bird.position.copy(boid.position);
+            bird.rotation.y = Math.atan2( - boid.velocity.z, boid.velocity.x );
+            bird.rotation.z = Math.asin( boid.velocity.y / boid.velocity.length() );
+            bird.phase = ( bird.phase + ( Math.max( 0, bird.rotation.z ) + 0.1 )  ) % 62.83;
+            bird.geometry.vertices[ 5 ].y = bird.geometry.vertices[ 4 ].y = Math.sin( bird.phase ) * 5;
+        }
+        renderer.render(scene, camera);
+    }
+
+
+
+
+</script>
+
 </body>
 </html>
