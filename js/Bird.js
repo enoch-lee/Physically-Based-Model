@@ -5,7 +5,7 @@ var Bird = function () {
 	THREE.Geometry.call( this );
 
 	v(   5,   0,   0 );
-	v( - 5, - 2,   1 );
+	v( - 5, - 2,   0 );
 	v( - 5,   0,   0 );
 	v( - 5, - 2, - 1 );
 
