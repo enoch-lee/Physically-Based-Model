@@ -28,6 +28,8 @@
 <script src="js/Bird.js"></script>
 <script src="js/OrbitControls.js"></script>
 <script src="js/stats.min.js"></script>
+<script src="js/OBJLoader.js"></script>
+<script src="js/MTLLoader.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.6.5/dat.gui.min.js"></script>
 
 <script>
@@ -36,63 +38,37 @@
     const NEIGHBOR_RADIUS = 50;
     const MAX_STEER_FORCE = 0.1;
     const DESIRED_SEPARATION = 20;
-    const MAX_SPEED = 4;
-    const WALL_WIDTH = 500, WALL_HEIGHT = 500, WALL_DEPTH = 500;
+    const MAX_SPEED = 2;
+    const WALL_WIDTH = 500, WALL_HEIGHT = 350, WALL_DEPTH = 500;
 
     let Boid = function () {
         this.velocity = new THREE.Vector3();
         this.position = new THREE.Vector3();
+        this.isflu = false;
     };
 
-    Boid.prototype.move = function (boids, obj, predator, timeStep = 1) {
+    Boid.prototype.infect = function(boids, range){
+        for(let i = 0; i < boids.length; ++i){
+            if(!boids[i].isflu && this.position.distanceTo(boids[i].position) < range){
+                boids[i].isflu = true;
+            }
+        }
+    };
 
-        let acceleration = new THREE.Vector3();
-
-        let vector = new THREE.Vector3();
-        vector.set(-WALL_WIDTH / 2, this.position.y, this.position.z);
-        vector = this.avoid(vector);
-        vector.multiplyScalar(2);
-        acceleration.add(vector);
-        vector.set(WALL_WIDTH / 2, this.position.y, this.position.z);
-        vector = this.avoid(vector);
-        vector.multiplyScalar(2);
-        acceleration.add(vector);
-        vector.set(this.position.x, -WALL_HEIGHT / 2, this.position.z);
-        vector = this.avoid(vector);
-        vector.multiplyScalar(2);
-        acceleration.add(vector);
-        vector.set(this.position.x, WALL_HEIGHT/ 2, this.position.z);
-        vector = this.avoid(vector);
-        vector.multiplyScalar(2);
-        acceleration.add(vector);
-        vector.set(this.position.x, this.position.y, -WALL_DEPTH / 2);
-        vector = this.avoid(vector);
-        vector.multiplyScalar(2);
-        acceleration.add(vector);
-        vector.set(this.position.x, this.position.y, WALL_DEPTH / 2);
-        vector = this.avoid(vector);
-        vector.multiplyScalar(2);
-        acceleration.add(vector);
-
-        //predator.velocity.add(acceleration);
-
-        vector = this.avoid(predator);
-        acceleration.add(vector);
-
-        acceleration.add(this.flock(boids));
-        acceleration.add(this.avoidObj(obj));
-        this.velocity.add(acceleration);
+    Boid.prototype.move = function (steer, maxSpeed = MAX_SPEED, timeStep = 1) {
+        this.velocity.add(steer);
 
         let len = this.velocity.length();
-        if(len > MAX_SPEED){
-            this.velocity.divideScalar( len / MAX_SPEED );
+        if(len > maxSpeed){
+            this.velocity.divideScalar( len / maxSpeed );
         }
         this.position.add(this.velocity.multiplyScalar(timeStep));
     };
 
     Boid.prototype.flock = function (boids) {
         let acceleration = new THREE.Vector3();
-        acceleration.add(this.cohesion(boids));
+
+        acceleration.add(this.cohesion(boids).divideScalar(2));
         acceleration.add(this.alignment(boids));
         acceleration.add(this.separation(boids));
 
@@ -120,8 +96,8 @@
         steer.subVectors(pSum, this.position);
 
         let len = steer.length();
-        if (len > 0.01) {
-            steer.divideScalar(len / 0.05);
+        if (len > MAX_STEER_FORCE) {
+            steer.divideScalar(len / MAX_STEER_FORCE);
         }
 
         return steer;
@@ -178,10 +154,46 @@
         return steer;
     };
 
+    Boid.prototype.avoidWalls = function(width, height, depth){
+        let steer = new THREE.Vector3();
+        let vector = new THREE.Vector3();
+
+        vector.set(-width / 2, this.position.y, this.position.z);
+        vector = this.avoid(vector);
+        vector.multiplyScalar(5);
+        steer.add(vector);
+        vector.set(width / 2, this.position.y, this.position.z);
+        vector = this.avoid(vector);
+        vector.multiplyScalar(5);
+        steer.add(vector);
+        vector.set(this.position.x, 0, this.position.z);
+        vector = this.avoid(vector);
+        vector.multiplyScalar(5);
+        steer.add(vector);
+        vector.set(this.position.x, height, this.position.z);
+        vector = this.avoid(vector);
+        vector.multiplyScalar(5);
+        steer.add(vector);
+        vector.set(this.position.x, this.position.y, -depth / 2);
+        vector = this.avoid(vector);
+        vector.multiplyScalar(5);
+        steer.add(vector);
+        vector.set(this.position.x, this.position.y, depth / 2);
+        vector = this.avoid(vector);
+        vector.multiplyScalar(5);
+        steer.add(vector);
+
+        return steer;
+    };
+
+
+
     Boid.prototype.avoidObj = function(obj){
         let raycaster = new THREE.Raycaster(this.position, this.velocity);
         let steer = new THREE.Vector3();
+
         if(raycaster.intersectObject(obj).length > 0){
+
             let center = obj.geometry.boundingSphere.center;
             let radius = obj.geometry.boundingSphere.radius;
 
@@ -193,21 +205,34 @@
             vi.copy(u);
             vi.multiplyScalar(this.velocity.dot(u));
 
+            if(this.position.distanceTo(center) - radius < 0) {
+                let vector = new THREE.Vector3();
+                vector.subVectors(this.position, center);
+                steer.add(vector.multiplyScalar(5));
+            }
             let t = (this.position.distanceTo(center) - radius) / vi.length();
 
             let vt = new THREE.Vector3();
             vt.subVectors(this.velocity, vi);
 
             let vtLen = vt.length();
-            steer = vt.normalize().multiplyScalar(2 * (radius - t * vtLen));
-            //a.multiplyScalar(10);
+            steer = vt.normalize().multiplyScalar(2 * (radius - t * vtLen) / Math.pow(t, 2));
 
-//            let len = a.length();
-//            if (len > MAX_STEER_FORCE) {
-//                a.divideScalar(len / (3 * MAX_STEER_FORCE));
-//            }
-            //console.log(steer);
+            let len = steer.length();
+            if (len > MAX_STEER_FORCE) {
+                steer.divideScalar(len / (MAX_STEER_FORCE));
+            }
 
+        }
+        return steer;
+    };
+
+    Boid.prototype.reach = function(goal){
+        let steer = new THREE.Vector3();
+        steer.subVectors(goal, this.position);
+        let len = steer.length();
+        if (len > 1) {
+            steer.divideScalar(len / (MAX_STEER_FORCE));
         }
         return steer;
     }
@@ -221,18 +246,86 @@
           NEAR = 1,
           FAR = 10000;
     const BOIDS_NUM = 100;
+    const fluMaterial = new THREE.MeshBasicMaterial({color: 0x55acee, side: THREE.DoubleSide});
 
     let scene, camera, renderer;
     let cameraControls, stats;
-    let boids = [], birds = [];
-    let boid, bird;
-    let boid_predator, predator;
-    let cylinder;
+    let boids = [], birds = [], boid_predators = [], predators = [];
+    let obj, mesh;
+    let start = false;
+
 
     init();
     animate();
 
+
+    function createPanel(){
+
+        let params = {
+            'add predators': addPredators,
+            'start flu': startFlu
+        };
+
+        let panel = new dat.GUI({width: 300});
+        let folder1 = panel.addFolder( 'Flocking' );
+
+        folder1.add(params, 'add predators').name('Predators');
+        folder1.add(params, 'start flu').name('Flu');
+
+        folder1.open();
+
+    }
+    function startFlu(){
+        boids[Math.floor(Math.random() * boids.length)].isflu = true;
+    }
+
+    function addPredators(){
+        let boid_predator = new Boid();
+        boid_predator.position.set(Math.random() * WALL_WIDTH - WALL_WIDTH / 2, Math.random() * WALL_HEIGHT, Math.random() * WALL_DEPTH - WALL_DEPTH / 2);
+        boid_predator.velocity.set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1);
+
+        let predator = new THREE.Mesh(new Bird(), new THREE.MeshBasicMaterial({color: 0xff0000, side: THREE.DoubleSide}));
+        predator.position.copy(boid_predator.position);
+
+        boid_predators.push(boid_predator);
+        predators.push(predator);
+
+        scene.add(predator);
+    }
+
+    function loadOBJ(fileName){
+        let onProgress = function ( xhr ) {
+            if ( xhr.lengthComputable ) {
+                let percentComplete = xhr.loaded / xhr.total * 100;
+                console.log( Math.round(percentComplete, 2) + '% downloaded' );
+            }
+        };
+
+        let onError = function ( xhr ) {
+            console.log('error');
+        };
+
+        let mtlLoader = new THREE.MTLLoader();
+        mtlLoader.load('objs/' + fileName + '.mtl', (material) => {
+            material.preload();
+            let objLoader = new THREE.OBJLoader();
+            objLoader.setMaterials(material);
+            objLoader.load('objs/' + fileName + '.obj', (object) => {
+                object.position.set(100, 0, 100);
+                object.scale.set(3, 3, 3);
+                //obj = object;
+                //obj.children[0].geometry.computeBoundingSphere();
+                scene.add(object);
+                start = true;
+            });
+        }, onProgress, onError);
+    }
+
     function init() {
+
+        loadOBJ('Lowpoly_tree_sample');
+
+
         let container = document.getElementById('canvas');
 
         //renderer
@@ -247,7 +340,7 @@
 
         //camera
         camera = new THREE.PerspectiveCamera(VIEW_ANGLE, ASPECT, NEAR, FAR);
-        camera.position.set(0, 0, 500);
+        camera.position.set(0, 200, 500);
 
         //camera control
         cameraControls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -256,28 +349,36 @@
         cameraControls.minDistance = 10;
         cameraControls.update();
 
+        //light
+        let light = new THREE.PointLight( 0xdfebff, 2, 1500 );
+        light.position.set(0, 500, 0);
+        scene.add(light);
+        scene.add( new THREE.AmbientLight( 0x666666 ) );
+
         //performance monitor
         stats = new Stats();
         container.appendChild(stats.dom);
 
         //add obstacle
-        let geometry = new THREE.CylinderBufferGeometry( 30, 30, 60, 32 );
-        let material = new THREE.MeshPhongMaterial(
-            { color: 0x156289,
-              emissive: 0x072534,
-              flatShading: true}
-              //side: THREE.DoubleSide}
-        );
-        cylinder = new THREE.Mesh( geometry, material );
-        cylinder.geometry.computeBoundingSphere();
-        scene.add( cylinder );
+//        let geometry = new THREE.CylinderBufferGeometry( 30, 30, 60, 32 );
+//        let material = new THREE.MeshPhongMaterial(
+//            { color: 0x156289,
+//              emissive: 0x072534,
+//              flatShading: true}
+//              //side: THREE.DoubleSide}
+//        );
+//        obj = new THREE.Mesh( geometry, material );
+//        obj.geometry.computeBoundingSphere();
+//        obj.position.set(0, 30, 0);
+        //scene.add( obj );
 
         //generate boids and birds
         geometry = new Bird();
-        material = new THREE.MeshBasicMaterial({color: Math.random() * 0xffffff, side: THREE.DoubleSide});
+        material = new THREE.MeshBasicMaterial({color: 0x444444, side: THREE.DoubleSide});
         for (let i = 0; i < BOIDS_NUM; ++i) {
             boids[i] = new Boid();
-            boids[i].position.set(200, Math.random() * 200 - 100, Math.random() * 200 - 100);
+
+            boids[i].position.set(Math.random() * WALL_WIDTH - WALL_WIDTH / 2, Math.random() * WALL_HEIGHT, Math.random() * WALL_DEPTH - WALL_DEPTH / 2);
             boids[i].velocity.set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1);
 
             birds[i] = new THREE.Mesh(geometry, material);
@@ -285,11 +386,17 @@
             scene.add(birds[i]);
         }
 
-        boid_predator = new Boid();
-        boid_predator.position.set(0, 100, 0);
-        boid_predator.velocity.set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1);
-        predator = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({color: 0xff0000, side: THREE.DoubleSide}));
-        scene.add(predator);
+        //add grid helper
+        let gridHelper = new THREE.GridHelper( 500, 10 );
+        scene.add( gridHelper );
+
+        //create gui panel
+        createPanel();
+
+        mesh = new THREE.Mesh(new THREE.BoxGeometry(100, 100, 100), new THREE.MeshBasicMaterial({side: THREE.DoubleSide}));
+        mesh.position.set(100, 50, 100);
+        mesh.geometry.computeBoundingSphere();
+        //scene.add(mesh);
     }
 
     function animate() {
@@ -298,28 +405,54 @@
         stats.update();
     }
 
+
     function render() {
         for (let i = 0; i < BOIDS_NUM; ++i) {
-            boid = boids[i];
-            bird = birds[i];
+            let boid = boids[i];
+            let bird = birds[i];
 
-            boid.move(boids, cylinder, boid_predator.position);
+            if(boid.isflu){
+                boid.infect(boids, 10);
+                bird.material = fluMaterial;
+            }
+
+            let steer = new THREE.Vector3();
+            steer.add(boid.avoidWalls(WALL_WIDTH, WALL_HEIGHT, WALL_DEPTH));
+            for(let j = 0; j < boid_predators.length; ++j){
+                steer.add((boid.avoid(boid_predators[j].position)).multiplyScalar(5));
+            }
+            steer.add(boid.flock(boids));
+            steer.add((boid.avoidObj(mesh)).multiplyScalar(10));
+
+            boid.move(steer);
             bird.position.copy(boid.position);
 
-            let color = bird.material.color;
-            color.r = color.g = color.b = ( 500 - bird.position.z ) / 1000;
+            //let color = bird.material.color;
+            //color.r = color.g = color.b = ( 500 - bird.position.z ) / 1000;
             bird.rotation.y = Math.atan2(-boid.velocity.z, boid.velocity.x);
             bird.rotation.z = Math.asin(boid.velocity.y / boid.velocity.length());
-            bird.phase = ( bird.phase + ( Math.max(0, bird.rotation.z) + 0.1 )  ) % 62.83;
+            bird.phase = ( bird.phase + ( 0.1 )  ) % 62.83;
+            //bird.phase = ( bird.phase + ( Math.max(0, bird.rotation.z) + 0.1 )  ) % 62.83;
             bird.geometry.vertices[5].y = bird.geometry.vertices[4].y = Math.sin(bird.phase) * 5;
             bird.geometry.verticesNeedUpdate = true;
         }
 
-        //boid_predator.position.add(boid_predator.velocity);
-        predator.position.copy(boid_predator.position);
-        predator.geometry.vertices[5].y = predator.geometry.vertices[4].y = Math.sin(birds[0].phase) * 5;
-        predator.geometry.verticesNeedUpdate = true;
+        for(let i = 0; i < boid_predators.length; ++i){
+            let boid_predator = boid_predators[i];
+            let predator = predators[i];
 
+            let steer = new THREE.Vector3();
+            steer.add((boid_predator.avoidObj(mesh)).multiplyScalar(10));
+            steer.add(boid_predator.avoidWalls(WALL_WIDTH, WALL_HEIGHT, WALL_DEPTH));
+            steer.add(boid_predator.reach(boids[Math.floor(Math.random() * boids.length)].position));
+            boid_predator.move(steer, MAX_SPEED * 1.5);
+
+            predator.position.copy(boid_predator.position);
+            predator.rotation.y = Math.atan2(-boid_predator.velocity.z, boid_predator.velocity.x);
+            predator.rotation.z = Math.asin(boid_predator.velocity.y / boid_predator.velocity.length());
+            predator.geometry.vertices[5].y = predator.geometry.vertices[4].y = Math.sin(birds[0].phase) * 5;
+            predator.geometry.verticesNeedUpdate = true;
+        }
         renderer.render(scene, camera);
     }
 
