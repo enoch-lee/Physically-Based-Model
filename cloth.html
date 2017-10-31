@@ -43,8 +43,8 @@
 
 <script>
     /* testing cloth simulation */
-    var pinsFormation = [];
-    var pins = [ 6 ];
+    let pinsFormation = [];
+    let pins = [ 6 ];
     pinsFormation.push( pins );
     pins = [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 ];
     pinsFormation.push( pins );
@@ -59,11 +59,11 @@
         pins = pinsFormation[ ~~ ( Math.random() * pinsFormation.length ) ];
     }
 
-    var container, stats;
-    var camera, scene, renderer;
-    var clothGeometry;
-    var sphere;
-    var object;
+    let container, stats;
+    let camera, scene, renderer;
+    let clothGeometry;
+    let sphere;
+    let object;
     init();
     animate();
 
@@ -82,7 +82,7 @@
         scene.add( camera );
 
         // lights
-        var light, materials;
+        let light, materials;
         scene.add( new THREE.AmbientLight( 0x666666 ) );
         light = new THREE.DirectionalLight( 0xdfebff, 1.75 );
         light.position.set( 50, 200, 100 );
@@ -90,7 +90,7 @@
         light.castShadow = true;
         light.shadow.mapSize.width = 1024;
         light.shadow.mapSize.height = 1024;
-        var d = 300;
+        let d = 300;
         light.shadow.camera.left = - d;
         light.shadow.camera.right = d;
         light.shadow.camera.top = d;
@@ -106,7 +106,7 @@
         } );
 
         // cloth geometry
-        clothGeometry = new THREE.ParametricGeometry( clothFunction, cloth.w, cloth.h );
+        clothGeometry = new THREE.ParametricGeometry( clothFunc, cloth.w, cloth.h );
         clothGeometry.dynamic = true;
 
         // cloth mesh
@@ -116,12 +116,14 @@
         scene.add( object );
 
         // sphere
-        let ballGeo = new THREE.SphereGeometry( ballSize, 20, 20 );
-        let ballMaterial = new THREE.MeshPhongMaterial( { color: 0xaaaaaa } );
-        sphere = new THREE.Mesh( ballGeo, ballMaterial );
-        sphere.castShadow = true;
-        sphere.receiveShadow = true;
-        scene.add( sphere );
+//        let ballGeo = new THREE.SphereGeometry( ballSize, 20, 20 );
+//        let ballMaterial = new THREE.MeshPhongMaterial( { color: 0xaaaaaa } );
+//        sphere = new THREE.Mesh( ballGeo, ballMaterial );
+//        sphere.castShadow = true;
+//        sphere.receiveShadow = true;
+//        sphere.visible = false;
+//        scene.add( sphere );
+
 
         // renderer
         renderer = new THREE.WebGLRenderer( { antialias: true } );
@@ -143,13 +145,13 @@
         stats = new Stats();
         container.appendChild( stats.dom );
 
-        sphere.visible = false;
+
     }
 
     function animate() {
         requestAnimationFrame( animate );
-        var time = Date.now();
-        var windStrength = Math.cos( time / 7000 ) * 20 + 40;
+        let time = Date.now();
+        let windStrength = Math.cos( time / 7000 ) * 20 + 40;
 
         windForce.set( Math.sin( time / 2000 ), Math.cos( time / 3000 ), Math.sin( time / 1000 ) )
         windForce.normalize();
@@ -160,15 +162,15 @@
     }
 
     function render() {
-        var p = cloth.particles;
-        for ( var i = 0, il = p.length; i < il; i ++ ) {
+        let p = cloth.particles;
+        for ( let i = 0, il = p.length; i < il; i ++ ) {
             clothGeometry.vertices[ i ].copy( p[ i ].position );
         }
         clothGeometry.computeFaceNormals();
         clothGeometry.computeVertexNormals();
         clothGeometry.normalsNeedUpdate = true;
         clothGeometry.verticesNeedUpdate = true;
-        sphere.position.copy( ballPosition );
+        //sphere.position.copy( ballPosition );
         camera.lookAt( object.position );
         renderer.render( scene, camera );
     }

@@ -8,8 +8,17 @@ let ySegs = 10;
 const WIDTH = restDistance * xSegs;
 const HEIGHT = restDistance * ySegs;
 const MASS = 1;
-let pins = [];
-let cloth = new Cloth(xSegs, ySegs);
+const TIMESTEP = 18 / 1000;
+const TIMESTEP_SQ = TIMESTEP * TIMESTEP;
+
+const GRAVITY = 981 * 1.4;
+let gravity = new THREE.Vector3(0, -GRAVITY, 0);
+
+
+let lastTime;
+
+let wind = true;
+let windForce = new THREE.Vector3( 0, 0, 0 );
 
 //u, v -> [0, 1]
 let clothFunc = function(u, v){
@@ -17,7 +26,9 @@ let clothFunc = function(u, v){
     let y = v * HEIGHT;
     let z = 0;
     return new THREE.Vector3(x, y, z);
-}
+};
+
+let cloth = new Cloth(xSegs, ySegs);
 
 function Particle(x, y, z, mass){
     this.velocity = new THREE.Vector3(0, 0, 0);
@@ -27,16 +38,18 @@ function Particle(x, y, z, mass){
     this.a = new THREE.Vector3(0, 0, 0);
 }
 
+//Simple Euler Integration
 Particle.prototype.integrate = function(h){
-
-}
+    this.velocity.add(this.a.multiplyScalar(TIMESTEP));
+    let temp = new THREE.Vector3().copy(this.velocity);
+    this.position.add(temp.multiplyScalar(TIMESTEP));
+    this.a.set(0, 0, 0);
+};
 
 Particle.prototype.addForce = function( force ) {
     let temp = new THREE.Vector3().copy(force);
     this.a.add(temp.divideScalar( this.mass ));
 };
-
-let restDistance = 25;
 
 function Cloth(w, h){
     this.w = w;
@@ -109,16 +122,18 @@ function Cloth(w, h){
     function index( u, v ) {
         return u + v * ( w + 1 );
     }
+
+    this.index = index;
 }
 
-function elasticForce(p1, p2, distance){
+function springForce(p1, p2, distance){
     let diff = new THREE.Vector3();
     diff.subVectors(p1, p2);
     let currDistance = diff.length();
     if(currDistance === 0) return;
     diff.multiplyScalar(currDistance - distance).multiplyScalar(0.9);
-    let p1F = diff.clone();
-    let p2F = diff.clone();
+    let p1F = new THREE.Vector3().copy(diff);
+    let p2F = new THREE.Vector3().copy(diff);
     p1.a.sub(p1F.divideScalar(p1.mass));
     p2.a.add(p2F.divideScalar(p2.mass));
 }
@@ -130,39 +145,39 @@ function simulate( time ) {
         return;
     }
 
-    let i, il, particles, particle;
+    let i, particles, particle;
 
     // Aerodynamics forces
 
     if (wind) {
 
         let face, faces = clothGeometry.faces, normal;
-        particles = cloth.particles;
-        for ( i = 0, il = faces.length; i < il; i ++ ) {
+        let temp = new THREE.Vector3();
 
-            face = faces[ i ];
+        particles = cloth.particles;
+        for (i = 0; i < faces.length; i ++) {
+            face = faces[i];
             normal = face.normal;
 
-            tmpForce.copy( normal ).normalize().multiplyScalar( normal.dot( windForce ) );
-            particles[ face.a ].addForce( tmpForce );
-            particles[ face.b ].addForce( tmpForce );
-            particles[ face.c ].addForce( tmpForce );
-
+            temp.copy(normal).normalize().multiplyScalar(normal.dot(windForce));
+            particles[face.a].addForce( temp );
+            particles[face.b].addForce( temp );
+            particles[face.c].addForce( temp );
         }
-
     }
 
     for (i = 0; i < particles.length; i ++ ) {
-        particle = cloth.particles[ i ];
-        particle.addForce( gravity );
-        particle.integrate( TIMESTEP_SQ );
+        particle = cloth.particles[i];
+        particle.addForce(gravity);
+        particle.integrate(TIMESTEP_SQ);
     }
 
     // Start Constraints
 
-
-    for ( i = 0; i < il; i ++ ) {
-
+    let spring;
+    for ( i = 0; i < springs.length; i ++ ) {
+        spring = springs[i];
+        springForce(spring[0], spring[1], spring[1]);
     }
 
     // Pins Constraints
