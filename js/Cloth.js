@@ -83,38 +83,33 @@ Particle.prototype.addForce = function( force ) {
 
 // Performs Verlet integration
 
-Particle.prototype.integrate = function( timesq ) {
+Particle.prototype.integrate = function( timestep ) {
 
-	// var newPos = this.tmp.subVectors( this.position, this.previous );
-	// newPos.multiplyScalar( DRAG ).add( this.position );
-	// newPos.add( this.a.multiplyScalar( timesq ) );
-    //
-	// this.tmp = this.previous;
-	// this.previous = this.position;
-	// this.position = newPos;
-    //
-	// this.a.set( 0, 0, 0 );
+	var newPos = this.tmp.subVectors( this.position, this.previous );
+	newPos.multiplyScalar( DRAG ).add( this.position );
+	newPos.add( this.a.multiplyScalar( timesq ) );
 
-    this.velocity.add(this.a.multiplyScalar(TIMESTEP));
-    this.tmp = new THREE.Vector3().copy(this.velocity);
-    this.position.add(temp.multiplyScalar(TIMESTEP));
-    this.a.set(0, 0, 0);
+	this.tmp = this.previous;
+	this.previous = this.position;
+	this.position = newPos;
+
+	this.a.set( 0, 0, 0 );
+
+    // this.velocity.add(this.a.multiplyScalar(timestep));
+    // this.tmp.copy(this.velocity);
+    // this.position.add(this.tmp.multiplyScalar(timestep));
+    // this.a.set(0, 0, 0);
 };
 
-Particle.prototype.integrateRK4 = function(){
-    let k1;
-};
-
-
-var diff = new THREE.Vector3();
+let diff = new THREE.Vector3();
 
 function satisfyConstraints( p1, p2, distance ) {
 
 	diff.subVectors( p2.position, p1.position );
-	var currentDist = diff.length();
+	let currentDist = diff.length();
 	if ( currentDist === 0 ) return; // prevents division by 0
-	var correction = diff.multiplyScalar( 1 - distance / currentDist );
-	var correctionHalf = correction.multiplyScalar( 0.5 );
+	let correction = diff.multiplyScalar( 1 - distance / currentDist );
+	let correctionHalf = correction.multiplyScalar( 0.5 );
 	p1.position.add( correctionHalf );
 	p2.position.sub( correctionHalf );
 
@@ -138,10 +133,10 @@ function Cloth( w, h ) {
 	this.w = w;
 	this.h = h;
 
-	var particles = [];
-	var constraints = [];
+	let particles = [];
+	let constraints = [];
 
-	var u, v;
+	let u, v;
 
 	// Create particles
 	for ( v = 0; v <= h; v ++ ) {
