@@ -42,7 +42,7 @@
     const TIMESTEP = 18 / 1000;
     const GRAVITY = 981;
     const MASS = 0.1;
-    const DAMPING = 0.5;
+    const DAMPING = 0.1;
 
     let DRAG = 1 - 0.03;
 
@@ -57,9 +57,6 @@
     let WIDTH = restDistance * xSegs;
     let HEIGHT = restDistance * ySegs;
 
-    let isWind = false;
-    let isEdge = false;
-
     let clothFunction = function(u, v){
         let x = u * WIDTH;
         let y = v * HEIGHT;
@@ -69,7 +66,6 @@
 
     let k = [10, 0.1, 0.5];
     let cloth = new Cloth(xSegs, ySegs, restDistance, k);
-    let ballSize = 60;
 
     function damperForce(p1, p2, d){
         let diffVelocity = new THREE.Vector3();
@@ -90,13 +86,29 @@
 
     function springForce(p1, p2, restDistance, k){
         let diff = new THREE.Vector3();
+
         diff.subVectors(p2.position, p1.position);
-        let currentDist = diff.length();
-        if (currentDist === 0) return; // prevents division by 0
-        let correction = diff.multiplyScalar(1 - restDistance / currentDist);
-        let correctionHalf = correction.multiplyScalar(0.5);
-        p1.position.add(correctionHalf);
-        p2.position.sub(correctionHalf);
+        let currDistance = diff.length();
+        if(currDistance === 0) return;
+
+        let dir = new THREE.Vector3();
+        dir.copy(diff).normalize();
+
+        let f1 = new THREE.Vector3().copy(dir);
+        let f2 = new THREE.Vector3();
+        f1.multiplyScalar(currDistance - restDistance).multiplyScalar(k);
+        f2.copy(f1).multiplyScalar(-1);
+
+        p1.addForce(f1);
+        p2.addForce(f2);
+
+//        diff.subVectors(p2.position, p1.position);
+//        let currentDist = diff.length();
+//        if (currentDist === 0) return; // prevents division by 0
+//        let correction = diff.multiplyScalar(1 - restDistance / currentDist);
+//        let correctionHalf = correction.multiplyScalar(0.5);
+//        p1.position.add(correctionHalf);
+//        p2.position.sub(correctionHalf);
     }
 
     function simulate(time) {
@@ -118,85 +130,28 @@
             particle.addForce(gravity);
         }
 
-        if(isWind){
-            for (i = 0; i < faces.length; i ++) {
-                face = faces[i];
-                normal = face.normal;
-                temp.copy(normal).normalize().multiplyScalar(normal.dot(windForce));
-                particles[face.a].addForce(temp);
-                particles[face.b].addForce(temp);
-                particles[face.c].addForce(temp);
-            }
+        for (i = 0; i < faces.length; i ++) {
+            face = faces[i];
+            normal = face.normal;
+            temp.copy(normal).normalize().multiplyScalar(normal.dot(windForce));
+            particles[face.a].addForce(temp);
+            particles[face.b].addForce(temp);
+            particles[face.c].addForce(temp);
         }
 
-        //spring and damper
         for (i = 0; i < springs.length; i ++) {
             spring = springs[i];
             damperForce(spring[0], spring[1], DAMPING);
             springForce(spring[0], spring[1], spring[2], spring[3]);
         }
-
+//
         for (i = 0; i < particles.length; i ++ ) {
             particle = particles[i];
-            particle.integrateVerlet(TIMESTEP * TIMESTEP);
+            particle.integrateEuler(TIMESTEP);
+            //particle.integrateVerlet(TIMESTEP * TIMESTEP);
         }
 
-
-        //edge-edge detection
-        if(isEdge){
-            let objectEdge;
-            for(let j = 0; j < cloth.edges.length; ++j){
-                let clothEdge = cloth.edges[j];
-                for(i = 0; i < objectEdges.length; ++i){
-                    objectEdge = objectEdges[i];
-                    edge(clothEdge, objectEdge);
-                }
-            }
-        }
-
-        function edge(e, e2){
-            let e1 = [e[0].position, e[1].position];
-            let a = new THREE.Vector3().subVectors(e1[1], e1[0]);
-            let b = new THREE.Vector3().subVectors(e2[1], e2[0]);
-            let n = new THREE.Vector3().crossVectors(a, b).normalize();
-            let r = new THREE.Vector3().subVectors(e1[0], e2[0]);
-            let ai = new THREE.Vector3().copy(a).normalize();
-            let bi = new THREE.Vector3().copy(b).normalize();
-            let c = new THREE.Vector3().crossVectors(bi, n);
-            let d = new THREE.Vector3().crossVectors(ai, n);
-            let s = r.dot(c) / a.dot(c);
-            let t = r.multiplyScalar(-1).dot(d) / b.dot(d);
-            let pa = new THREE.Vector3().copy(e1[0]);
-            pa.add(a.multiplyScalar(s));
-            let qa = new THREE.Vector3().copy(e2[0]);
-            qa.add(b.multiplyScalar(t));
-            let diff = new THREE.Vector3().subVectors(qa, pa);
-            if(diff.length() < 10) {
-                e[0].velocity.multiplyScalar(-1);
-                e[1].velocity.multiplyScalar(-1);
-            }
-        }
-
-
-        //sphere detection
-        let diff = new THREE.Vector3();
-         for (i = 0; i < particles.length; i ++ ) {
-             particle = particles[i];
-             let pos = particle.position;
-             diff.subVectors(pos, sphere.position);
-             if (diff.length() < ballSize) {
-                 diff.normalize().multiplyScalar(ballSize);
-                 pos.copy(sphere.position).add(diff.multiplyScalar(1.05));
-            }
-         }
-
-        //ground detection
-        for (i = 0; i < particles.length; i ++ ) {
-            particle = particles[i];
-            if ( particle.position.y < 0 ) {
-                particle.position.y = 2;
-            }
-        }
+        //integrateRK4(particles, springs, TIMESTEP);
 
         // Pins Constraints
         for ( i = 0; i < pins.length; i ++ ) {
@@ -211,12 +166,11 @@
 <script>
     let container, stats;
     let camera, scene, renderer;
-    let clothGeometry, objectGeometry, objectEdges = [];
+    let clothGeometry;
     let sphere;
     let object;
 
     init();
-    createPanel();
     animate();
 
 
@@ -235,53 +189,12 @@
     pinsFormation.push( pins );
     pins = pinsFormation[2];
 
-    function createPanel(){
-
-        let params = {
-            'wind': toggleWind,
-            'pins': rmPins,
-            'edge': edgeDetection
-        };
-
-        let panel = new dat.GUI({width: 300});
-        let folder1 = panel.addFolder( 'Cloth' );
-
-        folder1.add(params, 'wind').name('Start Wind');
-        folder1.add(params, 'pins').name('Remove Pins');
-        folder1.add(params, 'edge').name('Edge-edge Detection');
-
-        folder1.open();
-
-    }
-
-    function toggleWind(){
-        if(isWind){
-            isWind = false;
-        }else{
-            isWind = true;
-        }
-    }
-
-    function edgeDetection(){
-        if(isEdge){
-            isEdge = false;
-        }else{
-            isEdge = true;
-        }
-
-    }
-
-    function rmPins(){
-        pins = [];
-    }
-
     function init() {
         container = document.getElementById('canvas');
         document.body.appendChild(container);
 
         // scene
         scene = new THREE.Scene();
-        scene.background = new THREE.Color(0xffffff);
 
         // camera
         camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 1, 10000);
@@ -293,7 +206,7 @@
         // lights
         let light, materials;
         scene.add( new THREE.AmbientLight(0x666666));
-        light = new THREE.DirectionalLight(0xdfebff, 0.5);
+        light = new THREE.DirectionalLight(0xdfebff, 1.75);
         light.position.set(50, 200, 100);
         light.position.multiplyScalar(1.3);
         light.castShadow = true;
@@ -310,6 +223,7 @@
 
         let clothMaterial = new THREE.MeshPhongMaterial({
             specular: 0x030303,
+            //map: clothTexture,
             side: THREE.DoubleSide,
             alphaTest: 0.5
         });
@@ -324,44 +238,14 @@
         object.castShadow = true;
         scene.add(object);
 
-        // object
-        objectGeometry = new THREE.SphereGeometry( ballSize, 10, 10 );
-        //objectGeometry = new THREE.BoxGeometry(60, 60, 60);
-        let ballMaterial = new THREE.MeshPhongMaterial( { color: 0xc72b26 } );
-        sphere = new THREE.Mesh( objectGeometry, ballMaterial );
-        sphere.castShadow = true;
-        sphere.receiveShadow = true;
-        sphere.position.set(ballSize, ballSize, ballSize);
-        scene.add(sphere);
-
-
-        let objectFaces = objectGeometry.faces;
-        for (i = 0; i < objectFaces.length; i ++) {
-            face = objectFaces[i];
-            objectEdges.push([objectGeometry.vertices[face.a], objectGeometry.vertices[face.b]]);
-            objectEdges.push([objectGeometry.vertices[face.a], objectGeometry.vertices[face.c]]);
-            objectEdges.push([objectGeometry.vertices[face.b], objectGeometry.vertices[face.c]]);
-        }
-
-//        let sphereEdges = new THREE.EdgesGeometry(objectGeometry);
-//        let lines = new THREE.LineSegments(sphereEdges);
-//        lines.position.copy(sphere.position);
-//        scene.add(lines);
-
-        // ground
-        let groundMaterial = new THREE.MeshPhongMaterial( {
-            shininess: 80,
-            color: 0xfae0af,
-            specular: 0xe5e2de
-        } );
-        let planeGeometry = new THREE.PlaneBufferGeometry( 100000, 100000 );
-        let ground = new THREE.Mesh( planeGeometry, groundMaterial );
-        ground.position.set( 0, 0, 0 );
-        ground.rotation.x = - Math.PI / 2;
-        ground.receiveShadow = true;
-        scene.add( ground );
-
-
+        // sphere
+//        let ballGeo = new THREE.SphereGeometry( ballSize, 20, 20 );
+//        let ballMaterial = new THREE.MeshPhongMaterial( { color: 0xaaaaaa } );
+//        sphere = new THREE.Mesh( ballGeo, ballMaterial );
+//        sphere.castShadow = true;
+//        sphere.receiveShadow = true;
+//        sphere.visible = false;
+//        scene.add( sphere );
 
         // renderer
         renderer = new THREE.WebGLRenderer({antialias: true});
@@ -382,13 +266,34 @@
         // performance monitor
         stats = new Stats();
         container.appendChild(stats.dom);
+
+//        // textures
+//        let textureLoader = new THREE.TextureLoader();
+//        let textureSquares = textureLoader.load( "textures/patterns/bright_squares256.png" );
+//        textureSquares.repeat.set( 50, 50 );
+//        textureSquares.wrapS = textureSquares.wrapT = THREE.RepeatWrapping;
+//        textureSquares.magFilter = THREE.NearestFilter;
+//        textureSquares.format = THREE.RGBFormat;
+//
+//        // ground
+//        let groundMaterial = new THREE.MeshPhongMaterial( {
+//            shininess: 80,
+//            color: 0xffffff,
+//            specular: 0xffffff
+//        } );
+//        let planeGeometry = new THREE.PlaneBufferGeometry( 1000, 1000 );
+//        let ground = new THREE.Mesh( planeGeometry, groundMaterial );
+//        ground.position.set( 0, 0, 0 );
+//        ground.rotation.x = - Math.PI / 2;
+//        ground.receiveShadow = true;
+//        scene.add( ground );
     }
 
     function animate(){
         requestAnimationFrame(animate);
         let time = Date.now();
 
-        let windStrength = Math.cos(time / 7000) * 20 + 30;
+        let windStrength = Math.cos(time / 7000) * 20 + 40;
         windForce.set(Math.sin(time / 2000), Math.cos(time / 3000), Math.sin(time / 1000));
         windForce.normalize();
         windForce.multiplyScalar(windStrength);

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Rigid Object Simulation</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <style>
+        
+    </style>
+</head>
+
+<body>
+
+<div id = 'canvas'></div>
+
+<script src="js/three.min.js"></script>
+<script src="js/OrbitControls.js"></script>
+<script src="js/stats.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.6.5/dat.gui.min.js"></script>
+
+
+<script>
+    let container, stats;
+    let camera, scene, renderer;
+
+    init();
+    createPanel();
+    animate();
+
+    function init() {
+        container = document.getElementById('canvas');
+        document.body.appendChild(container);
+
+        // scene
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        // camera
+        camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 1, 10000);
+        scene.add(camera);
+
+        // lights
+        let light;
+        scene.add( new THREE.AmbientLight(0x666666));
+        light = new THREE.DirectionalLight(0xdfebff, 0.5);
+        light.position.set(50, 200, 100);
+        light.position.multiplyScalar(1.3);
+        light.castShadow = true;
+        scene.add(light);
+
+        // object
+        objectGeometry = new THREE.SphereGeometry( ballSize, 10, 10 );
+        //objectGeometry = new THREE.BoxGeometry(60, 60, 60);
+        let ballMaterial = new THREE.MeshPhongMaterial( { color: 0xc72b26 } );
+        sphere = new THREE.Mesh( objectGeometry, ballMaterial );
+        sphere.castShadow = true;
+        sphere.receiveShadow = true;
+        sphere.position.set(ballSize, ballSize, ballSize);
+        scene.add(sphere);
+
+        // ground
+        let groundMaterial = new THREE.MeshPhongMaterial( {
+            shininess: 80,
+            color: 0xfae0af,
+            specular: 0xe5e2de
+        } );
+        let planeGeometry = new THREE.PlaneBufferGeometry( 100000, 100000 );
+        let ground = new THREE.Mesh( planeGeometry, groundMaterial );
+        ground.position.set( 0, 0, 0 );
+        ground.rotation.x = - Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add( ground );
+
+        // renderer
+        renderer = new THREE.WebGLRenderer({antialias: true});
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.renderSingleSided = false;
+        container.appendChild(renderer.domElement);
+
+        // controls
+        let controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.maxPolarAngle = Math.PI * 0.5;
+        controls.minDistance = 1000;
+        controls.maxDistance = 7500;
+
+        // performance monitor
+        stats = new Stats();
+        container.appendChild(stats.dom);
+    }
+
+    function animate(){
+        requestAnimationFrame(animate);
+        render();
+        stats.update();
+    }
+
+    function render() {
+        camera.lookAt(object.position);
+        renderer.render(scene, camera);
+    }
+</script>
+</body>
+</html>
