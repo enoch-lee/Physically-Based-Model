@@ -5,7 +5,23 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
     <style>
-        
+        body {
+            font-family: Monospace;
+            background-color: #000;
+            color: #000;
+            margin: 0px;
+            overflow: hidden;
+        }
+        #info {
+            position: absolute;
+            padding: 10px;
+            width: 100%;
+            text-align: center;
+        }
+        a {
+            text-decoration: underline;
+            cursor: pointer;
+        }
     </style>
 </head>
 
@@ -16,6 +32,7 @@
 <script src="js/three.min.js"></script>
 <script src="js/OrbitControls.js"></script>
 <script src="js/stats.min.js"></script>
+<script src="Rigid.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.6.5/dat.gui.min.js"></script>
 
 
@@ -23,8 +40,13 @@
     let container, stats;
     let camera, scene, renderer;
 
+    let S = new State();
+    let I0 = new THREE.Matrix3();
+    let invI0 = new THREE.Matrix3();
+    const MASS = 1;
+    const TIMESTEP = 20 / 1000;
+
     init();
-    createPanel();
     animate();
 
     function init() {
@@ -37,6 +59,7 @@
 
         // camera
         camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 1, 10000);
+        camera.position.set(200, 200, 0);
         scene.add(camera);
 
         // lights
@@ -49,14 +72,13 @@
         scene.add(light);
 
         // object
-        objectGeometry = new THREE.SphereGeometry( ballSize, 10, 10 );
-        //objectGeometry = new THREE.BoxGeometry(60, 60, 60);
-        let ballMaterial = new THREE.MeshPhongMaterial( { color: 0xc72b26 } );
-        sphere = new THREE.Mesh( objectGeometry, ballMaterial );
-        sphere.castShadow = true;
-        sphere.receiveShadow = true;
-        sphere.position.set(ballSize, ballSize, ballSize);
-        scene.add(sphere);
+        objectGeometry = new THREE.BoxGeometry(60, 60, 60);
+        let objectMaterial = new THREE.MeshPhongMaterial( { color: 0xc72b26 } );
+        object = new THREE.Mesh( objectGeometry, objectMaterial );
+        object.castShadow = true;
+        object.receiveShadow = true;
+        object.position.set(0, 100, 0);
+        scene.add(object);
 
         // ground
         let groundMaterial = new THREE.MeshPhongMaterial( {
@@ -64,7 +86,7 @@
             color: 0xfae0af,
             specular: 0xe5e2de
         } );
-        let planeGeometry = new THREE.PlaneBufferGeometry( 100000, 100000 );
+        let planeGeometry = new THREE.PlaneBufferGeometry( 1000, 1000 );
         let ground = new THREE.Mesh( planeGeometry, groundMaterial );
         ground.position.set( 0, 0, 0 );
         ground.rotation.x = - Math.PI / 2;
@@ -87,6 +109,19 @@
         // performance monitor
         stats = new Stats();
         container.appendChild(stats.dom);
+
+        //
+        iniRigidBody();
+    }
+
+    function iniRigidBody(){
+         I0 = setBoxInertia(10, 10, 10, 1);
+         invI0.getInverse(I0, true);
+
+         S.x.set(0, 0, 0);
+         S.P.set(10, 10, 10);
+         S.L.set(5, 5, 5);
+         S.q.set(1, 1, 1, 1);
     }
 
     function animate(){
@@ -96,7 +131,7 @@
     }
 
     function render() {
-        camera.lookAt(object.position);
+        rigidMotion(S, MASS, I0, TIMESTEP);
         renderer.render(scene, camera);
     }
 </script>
