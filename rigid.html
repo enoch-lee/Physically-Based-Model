@@ -122,6 +122,7 @@
          S.P.set(10, 10, 10);
          S.L.set(5, 5, 5);
          S.q.set(1, 1, 1, 1);
+         S.m = 1;
     }
 
     function animate(){
@@ -131,7 +132,9 @@
     }
 
     function render() {
-        rigidMotion(S, MASS, I0, TIMESTEP);
+        rigidMotion(S, invI0, TIMESTEP);
+        object.position.copy(S.x);
+        object.quaternion.copy(S.q);
         renderer.render(scene, camera);
     }
 </script>

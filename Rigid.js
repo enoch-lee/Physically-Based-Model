@@ -2,7 +2,7 @@
  * Created by Zishuo Li on 11/5/2017.
  */
 
-let State = function(x, P, L, q){
+let State = function(x, P, L, q, mass){
 
     this.type = 'state';
 
@@ -11,11 +11,13 @@ let State = function(x, P, L, q){
     this.L = L || new THREE.Vector3();
     this.q = q || new THREE.Quaternion();
 
+    this.m = mass || 1;
+    this.invI = new THREE.Matrix3();
+
     this.next = function(S, h){
         this.x.add(S.x.multiplyScalar(h));
         this.P.add(S.P.multiplyScalar(h));
         this.L.add(S.L.multiplyScalar(h));
-
         let temp = new THREE.Quaternion();
         temp.set(S.q.x * h, S.q.y * h, S.q.z * h, S.q.w * h);
         this.q.x += temp.x;
@@ -33,25 +35,22 @@ let State = function(x, P, L, q){
 };
 
 
-let computeRigidDerivative = function(S, mass, invI0){
+let computeRigidDerivative = function(S, invI0){
+    let invI = S.invI;
+    let m = S.m;
     let derivative = new State();
-    derivative.x.set(S.P.x / mass, S.P.y / mass, S.P.z / mass);
+    derivative.x.set(S.P.x / m, S.P.y / m, S.P.z / m);
 
     let R = new THREE.Matrix3();
     R = quaternion2Matrix(S.q);
 
     let Rt = new THREE.Matrix3().copy(R).transpose();
-    let invI = new THREE.Matrix3();
     let temp = new THREE.Matrix3();
     temp.multiplyMatrices(R, invI0);
     invI.multiplyMatrices(temp, Rt);
 
-    let e = invI.elements;
     let L = S.L;
-    let w = new THREE.Vector3();
-    w.x = e[0] * L.x + e[1] * L.y + e[2] * L.z;
-    w.y = e[3] * L.x + e[4] * L.y + e[5] * L.z;
-    w.z = e[6] * L.x + e[7] * L.y + e[8] * L.z;
+    let w = matrix3vector3(invI, L);
 
     let wq = new THREE.Quaternion();
     wq.set(w.x, w.y, w.z, 0);
@@ -59,17 +58,44 @@ let computeRigidDerivative = function(S, mass, invI0){
     wq.set(wq.x / 2, wq.y / 2, wq.z / 2, wq.w / 2);
 
     derivative.q = wq;
-    derivative.q = wq;
 
     return derivative;
 };
 
-let rigidMotion = function(S, mass, I0, timeStep){
+let rigidMotion = function(S, invI0, timeStep){
     let drvState = new State();
-    drvState = computeRigidDerivative(S, mass, I0);
+    drvState = computeRigidDerivative(S, invI0);
+
+    let normal = new THREE.Vector3(1, 1, 1);
+    let p = new THREE.Vector3(1, 3, 2);
+    let cr = 0.9;
+
+    //updateCollision(S, normal, p, cr, S.invI);
     S.next(drvState, timeStep);
     S.q.normalize();
 };
+
+let updateCollision = function(S, normal, p, cr, invI){
+    let m = S.m;
+    let va = new THREE.Vector3().copy(S.P).divideScalar(m);
+    let wa = matrix3vector3(invI, S.L);
+    let ra = new THREE.Vector3().subVectors(p, S.x);
+    let v = va.add(wa.cross(ra));
+    let n = new THREE.Vector3().copy(normal);
+    let preV = v.dot(n);
+
+    let a = -(1 + cr) * preV;
+    let b = new THREE.Vector3().crossVectors(ra, n).cross(ra);
+    let c = matrix3vector3(invI, b);
+    let d = 1 / m + n.dot(c);
+    let j = a / d;
+
+    let J = n.multiplyScalar(j);
+    let e = new THREE.Vector3().crossVectors(ra, n);
+    let L = e.multiplyScalar(j);
+    S.P.add(J);
+    S.L.add(L);
+}
 
 let quaternion2Matrix = function(q){
     let m= new THREE.Matrix3();
@@ -97,3 +123,14 @@ let setBoxInertia = function(w, h, l, mass){
     e[8] = a * (l * l + h * h);
     return I;
 };
+
+
+
+let matrix3vector3 = function(m3, v){
+    let m = m3.elements;
+    let a = new THREE.Vector3();
+    a.x = m[0] * v.x + m[1] * v.y + m[2] * v.z;
+    a.y = m[3] * v.x + m[4] * v.y + m[5] * v.z;
+    a.z = m[6] * v.x + m[7] * v.y + m[8] * v.z;
+    return a;
+}
