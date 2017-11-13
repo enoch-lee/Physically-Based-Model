@@ -73,25 +73,25 @@
 
         // object
         objectGeometry = new THREE.BoxGeometry(60, 60, 60);
-        let objectMaterial = new THREE.MeshPhongMaterial( { color: 0xc72b26 } );
-        object = new THREE.Mesh( objectGeometry, objectMaterial );
+        let objectMaterial = new THREE.MeshPhongMaterial({color: 0xc72b26});
+        object = new THREE.Mesh(objectGeometry, objectMaterial);
         object.castShadow = true;
         object.receiveShadow = true;
         object.position.set(0, 100, 0);
         scene.add(object);
 
         // ground
-        let groundMaterial = new THREE.MeshPhongMaterial( {
+        let groundMaterial = new THREE.MeshPhongMaterial({
             shininess: 80,
             color: 0xfae0af,
             specular: 0xe5e2de
-        } );
-        let planeGeometry = new THREE.PlaneBufferGeometry( 1000, 1000 );
-        let ground = new THREE.Mesh( planeGeometry, groundMaterial );
-        ground.position.set( 0, 0, 0 );
+        });
+        let planeGeometry = new THREE.PlaneBufferGeometry(1000, 1000);
+        let ground = new THREE.Mesh(planeGeometry, groundMaterial);
+        ground.position.set(0, 0, 0);
         ground.rotation.x = - Math.PI / 2;
         ground.receiveShadow = true;
-        scene.add( ground );
+        scene.add(ground);
 
         // renderer
         renderer = new THREE.WebGLRenderer({antialias: true});
@@ -118,11 +118,11 @@
          I0 = setBoxInertia(10, 10, 10, 1);
          invI0.getInverse(I0, true);
 
-         S.x.set(0, 0, 0);
-         S.P.set(10, 10, 10);
+         S.x.set(0, 100, 0);
+         S.q.set(0, 0, 0, 1);
+         S.P.set(0, 10, 0);
          S.L.set(5, 5, 5);
-         S.q.set(1, 1, 1, 1);
-         S.m = 1;
+         S.m = MASS;
     }
 
     function animate(){
@@ -131,11 +131,37 @@
         stats.update();
     }
 
+
     function render() {
+        object.updateMatrixWorld();
+
+
+        collistionDetection(object);
         rigidMotion(S, invI0, TIMESTEP);
+
         object.position.copy(S.x);
         object.quaternion.copy(S.q);
+        //console.log(S.q);
+//        object.geometry.computeFaceNormals();
+//        object.geometry.computeVertexNormals();
+//        object.geometry.normalsNeedUpdate = true;
+//        object.geometry.verticesNeedUpdate = true;
         renderer.render(scene, camera);
+    }
+
+    function collistionDetection(object){
+        let vertices = object.geometry.vertices;
+        let normal = new THREE.Vector3(0, 1, 0);
+        for(let i  = 0; i < vertices.length; ++i){
+            let vector = object.geometry.vertices[i].clone();
+            vector.applyMatrix4( object.matrixWorld );
+            if(vector.y < 0) {
+                console.log(vector.y);
+                updateCollision(S, normal, vector, 1);
+                S.x.y -= vector.y - 0.1;
+                break;
+            }
+        }
     }
 </script>
 </body>
