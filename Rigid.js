@@ -4,18 +4,19 @@
 
 let State = function(x, P, L, q, mass){
 
-    this.type = 'state';
-
     this.x = x || new THREE.Vector3();
     this.P = P || new THREE.Vector3();
     this.L = L || new THREE.Vector3();
     this.q = q || new THREE.Quaternion();
+
+    this.prev = new THREE.Vector3();
 
     this.m = mass || 1;
     this.invI = new THREE.Matrix3();
     this.temp = new THREE.Vector3();
 
     this.next = function(S, h){
+
         this.x.add(S.x.multiplyScalar(h));
         this.P.add(S.P.multiplyScalar(h));
         this.L.add(S.L.multiplyScalar(h));
@@ -26,11 +27,14 @@ let State = function(x, P, L, q, mass){
         this.q.z += temp.z;
         this.q.w += temp.w;
 
-        if(this.P.length() < 1 && this.x.y < 35) {
-            this.P.set(0, 0, 0);
-        }
-
     }
+};
+
+let rigidMotion = function(S, invI0, timeStep){
+    let derivState = new State();
+    derivState = computeRigidDerivative(S, invI0);
+    S.next(derivState, timeStep);
+    S.q.normalize();
 };
 
 let computeRigidDerivative = function(S, invI0){
@@ -57,17 +61,10 @@ let computeRigidDerivative = function(S, invI0){
 
     derivState.q = wq;
 
-    let gravity = new THREE.Vector3(0, -5, 0);
+    let gravity = new THREE.Vector3(0, -0.5, 0);
     derivState.P.add(gravity);
 
     return derivState;
-};
-
-let rigidMotion = function(S, invI0, timeStep){
-    let derivState = new State();
-    derivState = computeRigidDerivative(S, invI0);
-    S.next(derivState, timeStep);
-    S.q.normalize();
 };
 
 let updateCollision = function(S, normal, p, cr){
@@ -87,26 +84,32 @@ let updateCollision = function(S, normal, p, cr){
     let d = 1 / m + n.dot(c);
     let j = a / d;
 
-
+    //console.log(j);
     let J = n.multiplyScalar(j);
     let e = new THREE.Vector3().crossVectors(ra, n);
     let L = e.multiplyScalar(j);
-    //console.log(p.length());
-    //console.log(S.x.length());
 
-    //console.log(J.length);
-    //console.log(S.P);
-    if(J.length() < S.P.length()){
-        S.P.set(0, 0, 0);
-    }else{
-        S.P.add(J);
-    }
-    //console.log(S.P);
+    S.P.add(J);
     S.L.add(L);
 };
 
+function collistionDetection(object){
+    let vertices = object.geometry.vertices;
+    let normal = new THREE.Vector3(0, 1, 0);
+
+    for(let i  = 0; i < vertices.length; ++i){
+        let vector = object.geometry.vertices[i].clone();
+        vector.applyMatrix4( object.matrixWorld );
+        let dist = vector.dot(normal);
+        if(vector.y <  0.1) {
+            console.log(i);
+            updateCollision(S, normal, vector, 0.5);
+        }
+    }
+}
+
 let quaternion2Matrix = function(q){
-    let m= new THREE.Matrix3();
+    let m = new THREE.Matrix3();
     let x00 = 1 - 2 * q.y * q.y - 2 * q.z * q.z;
     let x01 = 2 * q.x * q.y - 2 * q.w * q.z;
     let x02 = 2 * q.x * q.z - 2 * q.w * q.y;

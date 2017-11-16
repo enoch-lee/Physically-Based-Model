@@ -18,7 +18,7 @@
             width: 100%;
             text-align: center;
         }
-        a {
+        a{
             text-decoration: underline;
             cursor: pointer;
         }
@@ -35,8 +35,8 @@
 <script src="Rigid.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.6.5/dat.gui.min.js"></script>
 
-
 <script>
+
     let container, stats;
     let camera, scene, renderer;
 
@@ -44,7 +44,7 @@
     let I0 = new THREE.Matrix3();
     let invI0 = new THREE.Matrix3();
     const MASS = 1;
-    const TIMESTEP = 20 / 1000;
+    const TIMESTEP = 60 / 1000;
 
     init();
     animate();
@@ -59,25 +59,24 @@
 
         // camera
         camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 1, 10000);
-        camera.position.set(200, 200, 0);
+        camera.position.set(0, 25, 25);
         scene.add(camera);
 
         // lights
         let light;
         scene.add( new THREE.AmbientLight(0x666666));
         light = new THREE.DirectionalLight(0xdfebff, 0.5);
-        light.position.set(50, 200, 100);
-        light.position.multiplyScalar(1.3);
+        light.position.set(0, 200, 0);
         light.castShadow = true;
         scene.add(light);
 
         // object
-        objectGeometry = new THREE.BoxGeometry(60, 60, 60);
+        objectGeometry = new THREE.BoxGeometry(2, 2, 2);
         let objectMaterial = new THREE.MeshPhongMaterial({color: 0xc72b26});
         object = new THREE.Mesh(objectGeometry, objectMaterial);
         object.castShadow = true;
         object.receiveShadow = true;
-        object.position.set(0, 100, 0);
+        object.position.set(0, 10, 0);
         scene.add(object);
 
         // ground
@@ -86,7 +85,7 @@
             color: 0xfae0af,
             specular: 0xe5e2de
         });
-        let planeGeometry = new THREE.PlaneBufferGeometry(1000, 1000);
+        let planeGeometry = new THREE.PlaneBufferGeometry(20, 20);
         let ground = new THREE.Mesh(planeGeometry, groundMaterial);
         ground.position.set(0, 0, 0);
         ground.rotation.x = - Math.PI / 2;
@@ -103,25 +102,25 @@
         // controls
         let controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.maxPolarAngle = Math.PI * 0.5;
-        controls.minDistance = 1000;
-        controls.maxDistance = 7500;
+        controls.minDistance = 10;
+        controls.maxDistance = 500;
 
         // performance monitor
         stats = new Stats();
         container.appendChild(stats.dom);
 
-        //
+        // ini rigid object
         iniRigidBody();
     }
 
     function iniRigidBody(){
-         I0 = setBoxInertia(10, 10, 10, 1);
+         I0 = setBoxInertia(2, 2, 2, 1);
          invI0.getInverse(I0, true);
 
-         S.x.set(0, 100, 0);
+         S.x.set(0, 10, 0);
          S.q.set(0, 0, 0, 1);
-         S.P.set(0, 10, 0);
-         S.L.set(5, 5, 5);
+         S.P.set(0, 0, 0);
+         S.L.set(0, 0.3, 0.3);
          S.m = MASS;
     }
 
@@ -131,38 +130,21 @@
         stats.update();
     }
 
-
     function render() {
         object.updateMatrixWorld();
-
-
         collistionDetection(object);
         rigidMotion(S, invI0, TIMESTEP);
 
         object.position.copy(S.x);
         object.quaternion.copy(S.q);
-        //console.log(S.q);
+
 //        object.geometry.computeFaceNormals();
 //        object.geometry.computeVertexNormals();
 //        object.geometry.normalsNeedUpdate = true;
-//        object.geometry.verticesNeedUpdate = true;
+
         renderer.render(scene, camera);
     }
 
-    function collistionDetection(object){
-        let vertices = object.geometry.vertices;
-        let normal = new THREE.Vector3(0, 1, 0);
-        for(let i  = 0; i < vertices.length; ++i){
-            let vector = object.geometry.vertices[i].clone();
-            vector.applyMatrix4( object.matrixWorld );
-            if(vector.y < 0) {
-                console.log(vector.y);
-                updateCollision(S, normal, vector, 1);
-                S.x.y -= vector.y - 0.1;
-                break;
-            }
-        }
-    }
 </script>
 </body>
 </html>
